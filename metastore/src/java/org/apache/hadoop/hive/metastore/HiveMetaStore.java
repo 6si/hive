@@ -1538,9 +1538,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       if (tablePath != null) {
         try {
-          wh.deleteDir(tablePath, true, ifPurge);
           LOG.info("6si Data team Debugging: " + tablePath);
-
+          wh.deleteDir(tablePath, true, ifPurge);
         } catch (Exception e) {
           LOG.error("Failed to delete table directory: " + tablePath +
               " " + e.getMessage());
