@@ -799,6 +799,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           ms.rollbackTransaction();
           if (madeDir) {
             wh.deleteDir(dbPath, true);
+            LOG.info("6si Data team Debugging : create_database_core");
           }
         }
         for (MetaStoreEventListener listener : listeners) {
@@ -1015,6 +1016,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // Delete the data in the database
           try {
             wh.deleteDir(new Path(db.getLocationUri()), true);
+            LOG.info("6si Data team Debugging : drop_database_core");
           } catch (Exception e) {
             LOG.error("Failed to delete database directory: " + db.getLocationUri() +
                 " " + e.getMessage());
@@ -1342,6 +1344,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           ms.rollbackTransaction();
           if (madeDir) {
             wh.deleteDir(tblPath, true);
+            LOG.info("6si Data team Debugging : create_table_core_core");
           }
         }
         for (MetaStoreEventListener listener : listeners) {
@@ -1538,8 +1541,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       if (tablePath != null) {
         try {
-          LOG.info("6si Data team Debugging: " + tablePath);
           wh.deleteDir(tablePath, true, ifPurge);
+          LOG.info("6si Data team Debugging : deleteTableData : " + tablePath);
+
         } catch (Exception e) {
           LOG.error("Failed to delete table directory: " + tablePath +
               " " + e.getMessage());
@@ -1570,6 +1574,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         for (Path partPath : partPaths) {
           try {
             wh.deleteDir(partPath, true, ifPurge);
+            LOG.info("6si Data team Debugging : deletePartitionData : " + tablePath);
           } catch (Exception e) {
             LOG.error("Failed to delete partition directory: " + partPath +
                 " " + e.getMessage());
@@ -2627,10 +2632,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             if (isArchived) {
               assert (archiveParentDir != null);
               wh.deleteDir(archiveParentDir, true, mustPurge);
+              LOG.info("6si Data team Debugging : dropPartitionCommon : " + archiveParentDir);
             } else {
               assert (partPath != null);
               wh.deleteDir(partPath, true, mustPurge);
               deleteParentRecursive(partPath.getParent(), part_vals.size() - 1, mustPurge);
+              LOG.info("6si Data team Debugging : dropPartitionCommon : 2");
             }
             // ok even if the data is not deleted
           }
@@ -2660,6 +2667,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     private void deleteParentRecursive(Path parent, int depth, boolean mustPurge) throws IOException, MetaException {
       if (depth > 0 && parent != null && wh.isWritable(parent) && wh.isEmpty(parent)) {
         wh.deleteDir(parent, true, mustPurge);
+        LOG.info("6si Data team Debugging : deleteParentRecursive : ");
         deleteParentRecursive(parent.getParent(), depth - 1, mustPurge);
       }
     }
@@ -2801,9 +2809,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // The original directory was saved in params
           for (Path path : archToDelete) {
             wh.deleteDir(path, true, mustPurge);
+            LOG.info("6si Data team Debugging : dropPartitionsResult");
           }
           for (PathAndPartValSize p : dirsToDelete) {
             wh.deleteDir(p.path, true, mustPurge);
+            LOG.info("6si Data team Debugging : dropPartitionsResult 2");
             try {
               deleteParentRecursive(p.path.getParent(), p.partValSize - 1, mustPurge);
             } catch (IOException ex) {
