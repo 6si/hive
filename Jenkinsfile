@@ -28,7 +28,7 @@ node(nodeType) {
 
             stage('Maven build and test') {
                 sh '''
-                    mvn clean package -Pdist
+                    mvn clean package -Phadoop-2,dist
                 '''
             }
 
