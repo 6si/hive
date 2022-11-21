@@ -29,6 +29,7 @@
 
   <properties>
     <hive.path.to.root>..</hive.path.to.root>
+    <commons-dbcp.version>1.4</commons-dbcp.version>
   </properties>
 
   <dependencies>
@@ -120,6 +121,12 @@
       <artifactId>h2</artifactId>
       <version>${h2database.version}</version>
       <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-dbcp</groupId>
+      <artifactId>commons-dbcp</artifactId>
+      <version>${commons-dbcp.version}</version>
     </dependency>
 
   </dependencies>
