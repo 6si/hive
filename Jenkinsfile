@@ -26,6 +26,12 @@ node(nodeType) {
                 env.DEPLOYABLE=readFile('.env_deployable').trim()
             }
 
+            stage('Prepare environment') {
+                sh '''
+                    source $HOME/.custom-env-vars.sh
+                '''
+            }
+
             stage('Maven build and test') {
                 sh '''
                     if [ "$DEPLOYABLE" = "yes" ]; then
