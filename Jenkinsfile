@@ -26,12 +26,6 @@ node(nodeType) {
                 env.DEPLOYABLE=readFile('.env_deployable').trim()
             }
 
-            stage('Prepare environment') {
-                sh '''
-                    source $HOME/.custom-env-vars.sh
-                '''
-            }
-
             stage('Maven build and test') {
                 sh '''
                     if [ "$DEPLOYABLE" = "yes" ]; then
@@ -44,6 +38,7 @@ node(nodeType) {
 
             stage('Deploy to S3') {
                 sh '''
+                    source $HOME/.custom-env-vars.sh
                     if [ "$SIXSENSE_ENV" = "prod" ]; then
                         aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKET/hive/prod/
                     else
