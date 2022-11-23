@@ -39,9 +39,9 @@ node(nodeType) {
             stage('Deploy to S3') {
                 sh '''
                     if [ "$SIXSENSE_ENV" = "prod" ]; then
-                        aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKET/hive/prod/
+                        aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKEThive/prod/
                     else
-                        aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKET/hive/dev/
+                        aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKEThive/dev/
                     fi  
                 '''
             }
