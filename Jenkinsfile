@@ -22,21 +22,27 @@ node(nodeType) {
                 sh('echo $BRANCH_NAME > .branch_name')
                 sh('echo $(echo $BRANCH_NAME | awk -F\'env/\' \'{ if  ($1 == "6si-main") {$2 = "prod"} else if ($1 == "staging") {$2 = "staging"} else {$2 = "dev"}; print $2 }\') > .env_type')
                 env.SIXSENSE_ENV=readFile('.env_type').trim()
-                sh('echo $(echo $BRANCH_NAME | awk -F\'env/\' \'{ if  ($1 == "6si-main" || $1 == "staging" || length($1) == 0) {$2 = "yes"} else {$2 = "no"}; print $2 }\') > .env_buildable')
-                env.BUILDABLE=readFile('.env_buildable').trim()
+                sh('echo $(echo $BRANCH_NAME | awk -F\'env/\' \'{ if  ($1 == "6si-main" || $1 == "staging" || length($1) == 0) {$2 = "yes"} else {$2 = "no"}; print $2 }\') > .env_deployable')
+                env.DEPLOYABLE=readFile('.env_deployable').trim()
             }
 
             stage('Maven build and test') {
                 sh '''
-                    mvn clean package -Pdist
+                    if [ "$DEPLOYABLE" = "yes" ]; then
+                        mvn clean package -Pdist
+                    else
+                        mvn clean package -Pdist -DskipTests -Dmaven.javadoc.skip=true
+                    fi
                 '''
             }
 
             stage('Deploy to S3') {
                 sh '''
                     if [ "$SIXSENSE_ENV" = "prod" ]; then
-                      # aws s3 sync <target/> s3://<target>
-                    if
+                        aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKET/hive/prod/
+                    else
+                        aws s3 sync --exclude '*' --include '*-bin.tar.gz' ./packaging/target $BOOTSTRAP_BUCKET/hive/dev/
+                    fi  
                 '''
             }
 
