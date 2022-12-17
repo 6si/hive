@@ -1051,7 +1051,7 @@ public class StatsUtils {
     } else if (colTypeLowerCase.equals(serdeConstants.INTERVAL_DAY_TIME_TYPE_NAME)) {
       return JavaDataModel.JAVA32_META;
     } else {
-      throw new IllegalArgumentException("Size requested for unknown type: " + colType);
+      return GroupByOperator.javaSizeUnknownType;
     }
   }
 
