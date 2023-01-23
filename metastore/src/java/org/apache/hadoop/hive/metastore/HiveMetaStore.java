@@ -767,7 +767,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     private void create_database_core(RawStore ms, final Database db)
         throws AlreadyExistsException, InvalidObjectException, MetaException {
-      LOG.info("6si Data team Debugging : create_database_core");
       if (!validateName(db.getName(), null)) {
         throw new InvalidObjectException(db.getName() + " is not a valid database name");
       }
@@ -800,7 +799,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           ms.rollbackTransaction();
           if (madeDir) {
             wh.deleteDir(dbPath, true);
-            LOG.info("6si Data team Debugging : create_database_core");
           }
         }
         for (MetaStoreEventListener listener : listeners) {
@@ -916,7 +914,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         final String name, final boolean deleteData, final boolean cascade)
         throws NoSuchObjectException, InvalidOperationException, MetaException,
         IOException, InvalidObjectException, InvalidInputException {
-      LOG.info("6si Data team Debugging : drop_database_core");
       boolean success = false;
       Database db = null;
       List<Path> tablePaths = new ArrayList<Path>();
@@ -1018,7 +1015,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // Delete the data in the database
           try {
             wh.deleteDir(new Path(db.getLocationUri()), true);
-            LOG.info("6si Data team Debugging : drop_database_core");
           } catch (Exception e) {
             LOG.error("Failed to delete database directory: " + db.getLocationUri() +
                 " " + e.getMessage());
@@ -1256,7 +1252,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         final EnvironmentContext envContext)
         throws AlreadyExistsException, MetaException,
         InvalidObjectException, NoSuchObjectException {
-      LOG.info("6si Data team Debugging : create_table_core_core");
       if (!MetaStoreUtils.validateName(tbl.getTableName(), hiveConf)) {
         throw new InvalidObjectException(tbl.getTableName()
             + " is not a valid object name");
@@ -1346,7 +1341,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           ms.rollbackTransaction();
           if (madeDir) {
             wh.deleteDir(tblPath, true);
-            LOG.info("6si Data team Debugging : create_table_core_core");
           }
         }
         for (MetaStoreEventListener listener : listeners) {
@@ -1541,15 +1535,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
      */
     private void deleteTableData(Path tablePath, boolean ifPurge) {
 
-      LOG.info("6si Data team Debugging : deleteTableData : " + tablePath);
       if (tablePath != null) {
         try {
           wh.deleteDir(tablePath, true, ifPurge);
-          LOG.info("6si Data team Debugging : deleteTableData : " + tablePath);
-
         } catch (Exception e) {
           LOG.error("Failed to delete table directory: " + tablePath +
               " " + e.getMessage());
+          throw new MetaException(
+              "Failed to delete table directory: " + tablePath +
+              " " + e.getMessage()
+          );
         }
       }
     }
@@ -1573,15 +1568,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     *                removing data from warehouse
     */
     private void deletePartitionData(List<Path> partPaths, boolean ifPurge) {
-      LOG.info("6si Data team Debugging : deletePartitionData : ");
       if (partPaths != null && !partPaths.isEmpty()) {
         for (Path partPath : partPaths) {
           try {
             wh.deleteDir(partPath, true, ifPurge);
-            LOG.info("6si Data team Debugging : deletePartitionData : ");
           } catch (Exception e) {
             LOG.error("Failed to delete partition directory: " + partPath +
                 " " + e.getMessage());
+            throw new MetaException(
+                "Failed to delete partition directory: " + partPath +
+                " " + e.getMessage()
+            );
           }
         }
       }
@@ -2581,7 +2578,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<String> part_vals, final boolean deleteData, final EnvironmentContext envContext)
       throws MetaException, NoSuchObjectException, IOException, InvalidObjectException,
       InvalidInputException {
-      LOG.info("6si Data team Debugging : dropPartitionCommon : 2");
       boolean success = false;
       Path partPath = null;
       Table tbl = null;
@@ -2637,12 +2633,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             if (isArchived) {
               assert (archiveParentDir != null);
               wh.deleteDir(archiveParentDir, true, mustPurge);
-              LOG.info("6si Data team Debugging : dropPartitionCommon : " + archiveParentDir);
             } else {
               assert (partPath != null);
               wh.deleteDir(partPath, true, mustPurge);
               deleteParentRecursive(partPath.getParent(), part_vals.size() - 1, mustPurge);
-              LOG.info("6si Data team Debugging : dropPartitionCommon : 2");
             }
             // ok even if the data is not deleted
           }
@@ -2670,10 +2664,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     }
     private void deleteParentRecursive(Path parent, int depth, boolean mustPurge) throws IOException, MetaException {
-      LOG.info("6si Data team Debugging : deleteParentRecursive : ");
       if (depth > 0 && parent != null && wh.isWritable(parent) && wh.isEmpty(parent)) {
         wh.deleteDir(parent, true, mustPurge);
-        LOG.info("6si Data team Debugging : deleteParentRecursive : ");
         deleteParentRecursive(parent.getParent(), depth - 1, mustPurge);
       }
     }
@@ -2698,7 +2690,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public DropPartitionsResult drop_partitions_req(
         DropPartitionsRequest request) throws MetaException, NoSuchObjectException, TException {
-      LOG.info("6si Data team Debugging : dropPartitionsResult");
       RawStore ms = getMS();
       String dbName = request.getDbName(), tblName = request.getTblName();
       boolean ifExists = request.isSetIfExists() && request.isIfExists();
@@ -2816,11 +2807,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // The original directory was saved in params
           for (Path path : archToDelete) {
             wh.deleteDir(path, true, mustPurge);
-            LOG.info("6si Data team Debugging : dropPartitionsResult");
           }
           for (PathAndPartValSize p : dirsToDelete) {
             wh.deleteDir(p.path, true, mustPurge);
-            LOG.info("6si Data team Debugging : dropPartitionsResult 2");
             try {
               deleteParentRecursive(p.path.getParent(), p.partValSize - 1, mustPurge);
             } catch (IOException ex) {
