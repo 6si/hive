@@ -1,0 +1,22 @@
+{
+  "name": "Hive Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "context": "..",
+  "remoteUser": "vscode",
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "postCreateCommand": "java -version && mvn -v || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "vscjava.vscode-maven"
+      ]
+    }
+  }
+}
