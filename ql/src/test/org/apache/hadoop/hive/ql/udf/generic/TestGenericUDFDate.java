@@ -18,21 +18,21 @@
 
 package org.apache.hadoop.hive.ql.udf.generic;
 
-import java.sql.Date;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
-import junit.framework.TestCase;
-
+import org.apache.hadoop.hive.common.type.Date;
+import org.apache.hadoop.hive.common.type.Timestamp;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDF.DeferredJavaObject;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDF.DeferredObject;
-import org.apache.hadoop.hive.ql.udf.generic.GenericUDFDate;
 import org.apache.hadoop.hive.serde2.io.DateWritableV2;
 import org.apache.hadoop.hive.serde2.io.TimestampWritableV2;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorFactory;
 import org.apache.hadoop.io.Text;
+
+import junit.framework.TestCase;
 
 public class TestGenericUDFDate extends TestCase {
   public void testStringToDate() throws HiveException {
@@ -79,20 +79,31 @@ public class TestGenericUDFDate extends TestCase {
     assertEquals("to_date() test for ISO STRING without zone failed ", "2026-01-19", output.toString());
   }
 
+  public void testIsoStringWithNumericTimezoneOffsetToDate() throws HiveException {
+    GenericUDFDate udf = new GenericUDFDate();
+    ObjectInspector valueOI = PrimitiveObjectInspectorFactory.javaStringObjectInspector;
+    ObjectInspector[] arguments = {valueOI};
+
+    udf.initialize(arguments);
+    DeferredObject valueObj = new DeferredJavaObject(new Text("2026-01-20T14:20:59+05:30"));  // IST timezone
+    DeferredObject[] args = {valueObj};
+    DateWritableV2 output = (DateWritableV2) udf.evaluate(args);
+
+    assertEquals("to_date() test for ISO STRING without zone failed ", "2026-01-20", output.toString());
+  }
+
   public void testTimestampToDate() throws HiveException {
     GenericUDFDate udf = new GenericUDFDate();
     ObjectInspector valueOI = PrimitiveObjectInspectorFactory.writableTimestampObjectInspector;
     ObjectInspector[] arguments = {valueOI};
 
     udf.initialize(arguments);
-    java.sql.Timestamp jts = new java.sql.Timestamp(109, 06, 30, 4, 17, 52, 0);
-    org.apache.hadoop.hive.common.type.Timestamp hts =
-      org.apache.hadoop.hive.common.type.Timestamp.ofEpochMilli(jts.getTime(), jts.getNanos());
-    DeferredObject valueObj = new DeferredJavaObject(new TimestampWritableV2(hts));
+    DeferredObject valueObj = new DeferredJavaObject(new TimestampWritableV2(
+        Timestamp.valueOf(LocalDateTime.of(109, 06, 30, 4, 17, 52, 0).toString())));
     DeferredObject[] args = {valueObj};
     DateWritableV2 output = (DateWritableV2) udf.evaluate(args);
 
-    assertEquals("to_date() test for TIMESTAMP failed ", "2009-07-30", output.toString());
+    assertEquals("to_date() test for TIMESTAMP failed ", "0109-06-30", output.toString());
 
     // Try with null args
     DeferredObject[] nullArgs = { new DeferredJavaObject(null) };
@@ -106,13 +117,11 @@ public class TestGenericUDFDate extends TestCase {
     ObjectInspector[] arguments = {valueOI};
 
     udf.initialize(arguments);
-    java.sql.Date jdate = new java.sql.Date(109, 06, 30);
-    int days = DateWritableV2.dateToDays(jdate);
-    DeferredObject valueObj = new DeferredJavaObject(new DateWritableV2(days));
+    DeferredObject valueObj = new DeferredJavaObject(new DateWritableV2(Date.of(109, 06, 30)));
     DeferredObject[] args = {valueObj};
     DateWritableV2 output = (DateWritableV2) udf.evaluate(args);
 
-    assertEquals("to_date() test for DATEWRITABLE failed ", "2009-07-30", output.toString());
+    assertEquals("to_date() test for DATEWRITABLE failed ", "0109-06-30", output.toString());
 
     // Try with null args
     DeferredObject[] nullArgs = { new DeferredJavaObject(null) };
