@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.hadoop.mapred.TaskAttemptID;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.CompilationOpContext;
@@ -73,6 +74,8 @@ public class ExecMapper extends MapReduceBase implements Mapper {
 
   @Override
   public void configure(JobConf job) {
+    TaskAttemptID taskAttemptID = TaskAttemptID.forName(job.get("mapred.task.id"));
+
     execContext = new ExecMapperContext(job);
     Utilities.tryLoggingClassPaths(job, l4j);
     setDone(false);
@@ -100,6 +103,7 @@ public class ExecMapper extends MapReduceBase implements Mapper {
       execContext.setLocalWork(localWork);
 
       MapredContext.init(true, new JobConf(jc));
+      MapredContext.get().setTaskAttemptID(taskAttemptID);
 
       mo.passExecContext(execContext);
       mo.initializeLocalWork(jc);

@@ -85,9 +85,14 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.Reporter;
+
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hadoop.mapreduce.lib.output.PathOutputCommitter;
+import org.apache.hadoop.mapreduce.lib.output.PathOutputCommitterFactory;
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hive.common.util.HiveStringUtils;
-import org.apache.hive.common.util.Murmur3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,6 +153,11 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
   private transient boolean isInsertOverwrite;
   private transient String counterGroup;
   private transient BiFunction<Object[], ObjectInspector[], Integer> hashFunc;
+  
+  private transient PathOutputCommitter pathOutputCommitter;
+  private transient TaskAttemptContext taskAttemptContext;
+
+  public static final String TOTAL_TABLE_ROWS_WRITTEN = "TOTAL_TABLE_ROWS_WRITTEN";
   /**
    * Counters.
    */
@@ -249,7 +259,7 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
         }
         FileUtils.mkdir(fs, finalPaths[idx].getParent(), hconf);
       }
-      if(outPaths[idx] != null && fs.exists(outPaths[idx])) {
+      if(pathOutputCommitter == null && outPaths[idx] != null && fs.exists(outPaths[idx])) {
         if (Utilities.FILE_OP_LOGGER.isTraceEnabled()) {
           Utilities.FILE_OP_LOGGER.trace("committing " + outPaths[idx] + " to "
               + finalPaths[idx] + " (" + isMmTable + ")");
@@ -270,6 +280,13 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
               throw new HiveException("Unable to rename output from: "
                 + outPaths[idx] + " to: " + finalPaths[idx]);
             }
+        }
+      }
+
+      if (pathOutputCommitter != null && outPaths[idx] != null &&
+              outPaths[idx].getFileSystem(hconf).exists(outPaths[idx])) {
+        if (pathOutputCommitter.needsTaskCommit(taskAttemptContext)) {
+          pathOutputCommitter.commitTask(taskAttemptContext);
         }
       }
 
@@ -294,7 +311,7 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
     }
 
     public void initializeBucketPaths(int filesIdx, String taskId, boolean isNativeTable,
-        boolean isSkewedStoredAsSubDirectories) {
+        boolean isSkewedStoredAsSubDirectories) throws IOException {
       if (isNativeTable) {
         String extension = Utilities.getFileExtension(jc, isCompressed, hiveOutputFormat);
         String taskWithExt = extension == null ? taskId : taskId + extension;
@@ -304,7 +321,11 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
           } else {
             finalPaths[filesIdx] =  new Path(buildTmpPath(), taskWithExt);
           }
-          outPaths[filesIdx] = new Path(buildTaskOutputTempPath(), Utilities.toTempPath(taskId));
+          if (pathOutputCommitter != null) {
+            outPaths[filesIdx] = getPathOutputCommitterFile(taskId);
+          } else {
+            outPaths[filesIdx] = new Path(buildTaskOutputTempPath(), Utilities.toTempPath(taskId));
+          }
         } else {
           String taskIdPath = taskId;
           if (conf.isMerge()) {
@@ -534,6 +555,13 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
       destTablePath = conf.getDestPath();
       isInsertOverwrite = conf.getInsertOverwrite();
       counterGroup = HiveConf.getVar(hconf, HiveConf.ConfVars.HIVECOUNTERGROUP);
+
+      if (conf.getHasOutputCommitter()) {
+        taskAttemptContext = createTaskAttemptContext();
+        pathOutputCommitter = createPathOutputCommitter();
+        pathOutputCommitter.setupTask(taskAttemptContext);
+      }
+
       if (LOG.isInfoEnabled()) {
         LOG.info("Using serializer : " + serializer + " and formatter : " + hiveOutputFormat +
             (isCompressed ? " with compression" : ""));
@@ -733,9 +761,9 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
       }
       assert filesIdx == numFiles;
 
-      // in recent hadoop versions, use deleteOnExit to clean tmp files.
+      // in recent hadoop versions, use deleteOnExit to clean tmp files.h
       if (isNativeTable() && fs != null && fsp != null && !conf.isMmTable()) {
-        autoDelete = fs.deleteOnExit(fsp.outPaths[0]);
+        autoDelete = fsp.outPaths[0].getFileSystem(hconf).deleteOnExit(fsp.outPaths[0]);
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -760,7 +788,7 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
 
       if (isNativeTable() && !conf.isMmTable()) {
         // in recent hadoop versions, use deleteOnExit to clean tmp files.
-        autoDelete = fs.deleteOnExit(fsp.outPaths[filesIdx]);
+        autoDelete = fsp.outPaths[filesIdx].getFileSystem(hconf).deleteOnExit(fsp.outPaths[filesIdx]);
       }
 
       updateDPCounters(fsp, filesIdx);
@@ -1593,4 +1621,36 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
     return !conf.getTableInfo().isNonNative();
   }
 
+  private PathOutputCommitter createPathOutputCommitter() throws IOException {
+    return PathOutputCommitterFactory.createCommitter(new Path(conf.getTargetDirName()),
+            taskAttemptContext);
+  }
+
+  private TaskAttemptContextImpl createTaskAttemptContext() {
+    TaskAttemptID origId = MapredContext.get().getTaskAttemptID();
+
+    TaskAttemptID taskAttemptID = new TaskAttemptID(org.apache.commons.lang.StringUtils.EMPTY, 0,
+            origId.getTaskType(), origId.getTaskID().getId(), origId.getId());
+
+    // We want the committer to ignore the application attempt id because there is no way to know
+    // the correct value during job commit, so we force the committer to always use the default
+    // This is safe because Hive tasks are deterministic and different application attempts will
+    // always write to the same file
+    hconf.unset("mapreduce.job.application.attempt.id");
+
+    return new TaskAttemptContextImpl(hconf, taskAttemptID);
+  }
+
+  /**
+   * Get the {@link Path} to the file that Hive will write to. This file will be under the
+   * working path of the {@link PathOutputCommitter}. The name of the file is a combination of
+   * the current task ID and the Hive query ID. The reason the query ID is appended to the
+   * filename is to ensure uniqueness of the files. Since the committer is writing directly to
+   * the target table, its possible data for that able already exists. By appending the query ID,
+   * we ensure that the existing files never get overwritten.
+   */
+  private Path getPathOutputCommitterFile(String taskId) throws IOException {
+    return new Path(pathOutputCommitter.getWorkPath(),
+            taskId + "-" + hconf.get(ConfVars.HIVEQUERYID.varname));
+  }
 }

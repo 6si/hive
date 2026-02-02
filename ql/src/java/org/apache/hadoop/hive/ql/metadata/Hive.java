@@ -164,9 +164,11 @@ import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.metastore.utils.MetaStoreUtils;
 import org.apache.hadoop.hive.ql.ErrorMsg;
 import org.apache.hadoop.hive.ql.exec.AbstractFileMergeOperator;
+import org.apache.hadoop.hive.ql.exec.DataCommitter;
 import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
 import org.apache.hadoop.hive.ql.exec.FunctionTask;
 import org.apache.hadoop.hive.ql.exec.FunctionUtils;
+import org.apache.hadoop.hive.ql.exec.HiveDataCommitter;
 import org.apache.hadoop.hive.ql.exec.SerializationUtilities;
 import org.apache.hadoop.hive.ql.exec.Utilities;
 import org.apache.hadoop.hive.ql.io.AcidUtils;
@@ -1725,7 +1727,7 @@ public class Hive {
   public Partition loadPartition(Path loadPath, Table tbl, Map<String, String> partSpec,
       LoadFileType loadFileType, boolean inheritTableSpecs, boolean isSkewedStoreAsSubdir,
       boolean isSrcLocal, boolean isAcidIUDoperation, boolean hasFollowingStatsTask, Long writeId,
-      int stmtId, boolean isInsertOverwrite) throws HiveException {
+      int stmtId, boolean isInsertOverwrite, DataCommitter dataCommitter) throws HiveException {
     Path tblDataLocationPath =  tbl.getDataLocation();
     boolean isMmTableWrite = AcidUtils.isInsertOnlyTable(tbl.getParameters());
     assert tbl.getPath() != null : "null==getPath() for " + tbl.getTableName();
@@ -1814,11 +1816,12 @@ public class Hive {
           boolean isAutoPurge = "true".equalsIgnoreCase(tbl.getProperty("auto.purge"));
           boolean needRecycle = !tbl.isTemporary()
                   && ReplChangeManager.isSourceOfReplication(Hive.get().getDatabase(tbl.getDbName()));
-          replaceFiles(tbl.getPath(), loadPath, destPath, oldPartPath, getConf(), isSrcLocal,
-              isAutoPurge, newFiles, FileUtils.HIDDEN_FILES_PATH_FILTER, needRecycle, isManaged);
+          dataCommitter.replaceFiles(tbl.getPath(), loadPath, destPath, oldPartPath, getConf(), isSrcLocal,
+              isAutoPurge, newFiles, FileUtils.HIDDEN_FILES_PATH_FILTER, needRecycle, isManaged,
+                  this);
         } else {
           FileSystem fs = tbl.getDataLocation().getFileSystem(conf);
-          copyFiles(conf, loadPath, destPath, fs, isSrcLocal, isAcidIUDoperation,
+          dataCommitter.copyFiles(conf, loadPath, destPath, fs, isSrcLocal, isAcidIUDoperation,
               (loadFileType == LoadFileType.OVERWRITE_EXISTING), newFiles,
               tbl.getNumBuckets() > 0, isFullAcidTable, isManaged);
         }
@@ -2197,7 +2200,7 @@ private void constructOneLBLocationMap(FileStatus fSta,
       final String tableName, final Map<String, String> partSpec, final LoadFileType loadFileType,
       final int numDP, final int numLB, final boolean isAcid, final long writeId, final int stmtId,
       final boolean hasFollowingStatsTask, final AcidUtils.Operation operation,
-      boolean isInsertOverwrite) throws HiveException {
+      boolean isInsertOverwrite, DataCommitter dataCommitter) throws HiveException {
 
     final Map<Map<String, String>, Partition> partitionsMap =
         Collections.synchronizedMap(new LinkedHashMap<Map<String, String>, Partition>());
@@ -2245,8 +2248,8 @@ private void constructOneLBLocationMap(FileStatus fSta,
 
               // load the partition
               Partition newPartition = loadPartition(partPath, tbl, fullPartSpec, loadFileType,
-                  true, numLB > 0, false, isAcid, hasFollowingStatsTask, writeId, stmtId,
-                  isInsertOverwrite);
+                  true, false, numLB > 0, false, isAcid, hasFollowingStatsTask, writeId, stmtId,
+                  isInsertOverwrite, dataCommitter);
               partitionsMap.put(fullPartSpec, newPartition);
 
               if (inPlaceEligible) {
@@ -2338,9 +2341,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
    * @param writeId write ID allocated for the current load operation
    * @param stmtId statement ID of the current load statement
    */
-  public void loadTable(Path loadPath, String tableName, LoadFileType loadFileType, boolean isSrcLocal,
-      boolean isSkewedStoreAsSubdir, boolean isAcidIUDoperation, boolean hasFollowingStatsTask,
-      Long writeId, int stmtId, boolean isInsertOverwrite) throws HiveException {
+  public void loadTable(Path loadPath, String tableName, LoadFileType loadFileType,
+                        boolean isSrcLocal, boolean isSkewedStoreAsSubdir,
+                        boolean isAcidIUDoperation, boolean hasFollowingStatsTask, Long writeId,
+                        int stmtId, boolean isInsertOverwrite,
+                        DataCommitter committer) throws HiveException {
 
     List<Path> newFiles = Collections.synchronizedList(new ArrayList<Path>());
     Table tbl = getTable(tableName);
@@ -2384,12 +2389,12 @@ private void constructOneLBLocationMap(FileStatus fSta,
         boolean isAutopurge = "true".equalsIgnoreCase(tbl.getProperty("auto.purge"));
         boolean needRecycle = !tbl.isTemporary()
                 && ReplChangeManager.isSourceOfReplication(Hive.get().getDatabase(tbl.getDbName()));
-        replaceFiles(tblPath, loadPath, destPath, tblPath, conf, isSrcLocal, isAutopurge,
-            newFiles, FileUtils.HIDDEN_FILES_PATH_FILTER, needRecycle, isManaged);
+        committer.replaceFiles(tblPath, loadPath, destPath, tblPath, conf, isSrcLocal, isAutopurge,
+            newFiles, FileUtils.HIDDEN_FILES_PATH_FILTER, needRecycle, isManaged, this);
       } else {
         try {
           FileSystem fs = tbl.getDataLocation().getFileSystem(conf);
-          copyFiles(conf, loadPath, destPath, fs, isSrcLocal, isAcidIUDoperation,
+          committer.copyFiles(conf, loadPath, destPath, fs, isSrcLocal, isAcidIUDoperation,
               loadFileType == LoadFileType.OVERWRITE_EXISTING, newFiles,
               tbl.getNumBuckets() > 0, isFullAcidTable, isManaged);
         } catch (IOException e) {
@@ -3342,6 +3347,7 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
   }
 
+<<<<<<< ours
   private static void copyFiles(final HiveConf conf, final FileSystem destFs,
             FileStatus[] srcs, final FileSystem srcFs, final Path destf,
             final boolean isSrcLocal, boolean isOverwrite,
@@ -3443,7 +3449,8 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
   }
 
-  private static boolean isSubDir(Path srcf, Path destf, FileSystem srcFs, FileSystem destFs, boolean isSrcLocal) {
+  public static boolean isSubDir(Path srcf, Path destf, FileSystem srcFs, FileSystem destFs,
+                                 boolean isSrcLocal) {
     if (srcf == null) {
       LOG.debug("The source path is null for isSubDir method.");
       return false;
@@ -3486,84 +3493,6 @@ private void constructOneLBLocationMap(FileStatus fSta,
     return ShimLoader.getHadoopShims().getPathWithoutSchemeAndAuthority(path);
   }
 
-  private static String getPathName(int taskId) {
-    return Utilities.replaceTaskId("000000", taskId) + "_0";
-  }
-
-  /**
-   * <p>
-   *   Moves a file from one {@link Path} to another. If {@code isRenameAllowed} is true then the
-   *   {@link FileSystem#rename(Path, Path)} method is used to move the file. If its false then the data is copied, if
-   *   {@code isSrcLocal} is true then the {@link FileSystem#copyFromLocalFile(Path, Path)} method is used, else
-   *   {@link FileUtils#copy(FileSystem, Path, FileSystem, Path, boolean, boolean, HiveConf)} is used.
-   * </p>
-   *
-   * <p>
-   *   If the destination file already exists, then {@code _copy_[counter]} is appended to the file name, where counter
-   *   is an integer starting from 1.
-   * </p>
-   *
-   * @param conf the {@link HiveConf} to use if copying data
-   * @param sourceFs the {@link FileSystem} where the source file exists
-   * @param sourcePath the {@link Path} to move
-   * @param destFs the {@link FileSystem} to move the file to
-   * @param destDirPath the {@link Path} to move the file to
-   * @param isSrcLocal if the source file is on the local filesystem
-   * @param isOverwrite if true, then overwrite destination file if exist else make a duplicate copy
-   * @param isRenameAllowed true if the data should be renamed and not copied, false otherwise
-   *
-   * @return the {@link Path} the source file was moved to
-   *
-   * @throws IOException if there was an issue moving the file
-   */
-  private static Path mvFile(HiveConf conf, FileSystem sourceFs, Path sourcePath, FileSystem destFs, Path destDirPath,
-                             boolean isSrcLocal, boolean isOverwrite, boolean isRenameAllowed,
-                             int taskId) throws IOException {
-
-    // Strip off the file type, if any so we don't make:
-    // 000000_0.gz -> 000000_0.gz_copy_1
-    final String fullname = sourcePath.getName();
-    final String name;
-    if (taskId == -1) { // non-acid
-      name = FilenameUtils.getBaseName(sourcePath.getName());
-    } else { // acid
-      name = getPathName(taskId);
-    }
-    final String type = FilenameUtils.getExtension(sourcePath.getName());
-
-    // Incase of ACID, the file is ORC so the extension is not relevant and should not be inherited.
-    Path destFilePath = new Path(destDirPath, taskId == -1 ? fullname : name);
-
-    /*
-    * The below loop may perform bad when the destination file already exists and it has too many _copy_
-    * files as well. A desired approach was to call listFiles() and get a complete list of files from
-    * the destination, and check whether the file exists or not on that list. However, millions of files
-    * could live on the destination directory, and on concurrent situations, this can cause OOM problems.
-    *
-    * I'll leave the below loop for now until a better approach is found.
-    */
-    for (int counter = 1; destFs.exists(destFilePath); counter++) {
-      if (isOverwrite) {
-        destFs.delete(destFilePath, false);
-        break;
-      }
-      destFilePath =  new Path(destDirPath, name + (Utilities.COPY_KEYWORD + counter) +
-              ((taskId == -1 && !type.isEmpty()) ? "." + type : ""));
-    }
-
-    if (isRenameAllowed) {
-      destFs.rename(sourcePath, destFilePath);
-    } else if (isSrcLocal) {
-      destFs.copyFromLocalFile(sourcePath, destFilePath);
-    } else {
-      FileUtils.copy(sourceFs, sourcePath, destFs, destFilePath,
-          true,   // delete source
-          false,  // overwrite destination
-          conf);
-    }
-    return destFilePath;
-  }
-
   // Clears the dest dir when src is sub-dir of dest.
   public static void clearDestForSubDirSrc(final HiveConf conf, Path dest,
       Path src, boolean isSrcLocal) throws IOException {
@@ -3589,6 +3518,7 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
   }
 
+<<<<<<< ours
   // List the new files in destination path which gets copied from source.
   public static void listNewFilesRecursively(final FileSystem destFs, Path dest,
                                              List<Path> newFiles) throws HiveException {
@@ -3772,31 +3702,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
   }
 
-  static private HiveException getHiveException(Exception e, String msg) {
+  static public HiveException getHiveException(Exception e, String msg) {
     return getHiveException(e, msg, null);
   }
 
-  static private HiveException handlePoolException(ExecutorService pool, Exception e) {
-    HiveException he = null;
-
-    if (e instanceof HiveException) {
-      he = (HiveException) e;
-      if (he.getCanonicalErrorMsg() != ErrorMsg.GENERIC_ERROR) {
-        if (he.getCanonicalErrorMsg() == ErrorMsg.UNRESOLVED_RT_EXCEPTION) {
-          LOG.error("Failed to move: {}", he.getMessage());
-        } else {
-          LOG.error("Failed to move: {}", he.getRemoteErrorMsg());
-        }
-      }
-    } else {
-      LOG.error("Failed to move: {}", e.getMessage());
-      he = new HiveException(e.getCause());
-    }
-    pool.shutdownNow();
-    return he;
-  }
-
-  static private HiveException getHiveException(Exception e, String msg, String logMsg) {
+  static public HiveException getHiveException(Exception e, String msg, String logMsg) {
     // The message from remote exception includes the entire stack.  The error thrown from
     // hive based on the remote exception needs only the first line.
     String hiveErrMsg = null;
@@ -3822,6 +3732,7 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
   }
 
+<<<<<<< ours
   /**
    * If moving across different FileSystems or differnent encryption zone, need to do a File copy instead of rename.
    * TODO- consider if need to do this for different file authority.
@@ -3939,6 +3850,8 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
   }
 
+=======
+>>>>>>> theirs
   public static void moveAcidFiles(FileSystem fs, FileStatus[] stats, Path dst,
                                     List<Path> newFiles) throws HiveException {
     // The layout for ACID files is table|partname/base|delta|delete_delta/bucket
@@ -4068,149 +3981,6 @@ private void constructOneLBLocationMap(FileStatus fSta,
       }
     }
   }
-
-  /**
-   * Replaces files in the partition with new data set specified by srcf. Works
-   * by renaming directory of srcf to the destination file.
-   * srcf, destf, and tmppath should resident in the same DFS, but the oldPath can be in a
-   * different DFS.
-   *
-   * @param tablePath path of the table.  Used to identify permission inheritance.
-   * @param srcf
-   *          Source directory to be renamed to tmppath. It should be a
-   *          leaf directory where the final data files reside. However it
-   *          could potentially contain subdirectories as well.
-   * @param destf
-   *          The directory where the final data needs to go
-   * @param oldPath
-   *          The directory where the old data location, need to be cleaned up.  Most of time, will be the same
-   *          as destf, unless its across FileSystem boundaries.
-   * @param purge
-   *          When set to true files which needs to be deleted are not moved to Trash
-   * @param isSrcLocal
-   *          If the source directory is LOCAL
-   * @param newFiles
-   *          Output the list of new files replaced in the destination path
-   * @param isManaged
-   *          If the table is managed.
-   */
-  protected void replaceFiles(Path tablePath, Path srcf, Path destf, Path oldPath, HiveConf conf,
-          boolean isSrcLocal, boolean purge, List<Path> newFiles, PathFilter deletePathFilter,
-          boolean isNeedRecycle, boolean isManaged) throws HiveException {
-    try {
-
-      FileSystem destFs = destf.getFileSystem(conf);
-      // check if srcf contains nested sub-directories
-      FileStatus[] srcs;
-      FileSystem srcFs;
-      try {
-        srcFs = srcf.getFileSystem(conf);
-        srcs = srcFs.globStatus(srcf);
-      } catch (IOException e) {
-        throw new HiveException("Getting globStatus " + srcf.toString(), e);
-      }
-      if (srcs == null) {
-        LOG.info("No sources specified to move: " + srcf);
-        return;
-      }
-
-      if (oldPath != null) {
-        deleteOldPathForReplace(destf, oldPath, conf, purge, deletePathFilter, isNeedRecycle);
-      }
-
-      // first call FileUtils.mkdir to make sure that destf directory exists, if not, it creates
-      // destf
-      boolean destfExist = FileUtils.mkdir(destFs, destf, conf);
-      if(!destfExist) {
-        throw new IOException("Directory " + destf.toString()
-            + " does not exist and could not be created.");
-      }
-
-      // Two cases:
-      // 1. srcs has only a src directory, if rename src directory to destf, we also need to
-      // Copy/move each file under the source directory to avoid to delete the destination
-      // directory if it is the root of an HDFS encryption zone.
-      // 2. srcs must be a list of files -- ensured by LoadSemanticAnalyzer
-      // in both cases, we move the file under destf
-      if (srcs.length == 1 && srcs[0].isDirectory()) {
-        if (!moveFile(conf, srcs[0].getPath(), destf, true, isSrcLocal, isManaged)) {
-          throw new IOException("Error moving: " + srcf + " into: " + destf);
-        }
-
-        // Add file paths of the files that will be moved to the destination if the caller needs it
-        if (null != newFiles) {
-          listNewFilesRecursively(destFs, destf, newFiles);
-        }
-      } else {
-        // its either a file or glob
-        for (FileStatus src : srcs) {
-          Path destFile = new Path(destf, src.getPath().getName());
-          if (!moveFile(conf, src.getPath(), destFile, true, isSrcLocal, isManaged)) {
-            throw new IOException("Error moving: " + srcf + " into: " + destf);
-          }
-
-          // Add file paths of the files that will be moved to the destination if the caller needs it
-          if (null != newFiles) {
-            newFiles.add(destFile);
-          }
-        }
-      }
-    } catch (IOException e) {
-      throw new HiveException(e.getMessage(), e);
-    }
-  }
-
-  private void deleteOldPathForReplace(Path destPath, Path oldPath, HiveConf conf, boolean purge,
-      PathFilter pathFilter, boolean isNeedRecycle) throws HiveException {
-    Utilities.FILE_OP_LOGGER.debug("Deleting old paths for replace in " + destPath
-        + " and old path " + oldPath);
-    boolean isOldPathUnderDestf = false;
-    try {
-      FileSystem oldFs = oldPath.getFileSystem(conf);
-      FileSystem destFs = destPath.getFileSystem(conf);
-      // if oldPath is destf or its subdir, its should definitely be deleted, otherwise its
-      // existing content might result in incorrect (extra) data.
-      // But not sure why we changed not to delete the oldPath in HIVE-8750 if it is
-      // not the destf or its subdir?
-      isOldPathUnderDestf = isSubDir(oldPath, destPath, oldFs, destFs, false);
-      if (isOldPathUnderDestf) {
-        cleanUpOneDirectoryForReplace(oldPath, oldFs, pathFilter, conf, purge, isNeedRecycle);
-      }
-    } catch (IOException e) {
-      if (isOldPathUnderDestf) {
-        // if oldPath is a subdir of destf but it could not be cleaned
-        throw new HiveException("Directory " + oldPath.toString()
-            + " could not be cleaned up.", e);
-      } else {
-        //swallow the exception since it won't affect the final result
-        LOG.warn("Directory " + oldPath.toString() + " cannot be cleaned: " + e, e);
-      }
-    }
-  }
-
-
-  private void cleanUpOneDirectoryForReplace(Path path, FileSystem fs,
-      PathFilter pathFilter, HiveConf conf, boolean purge, boolean isNeedRecycle) throws IOException, HiveException {
-    if (isNeedRecycle && conf.getBoolVar(HiveConf.ConfVars.REPLCMENABLED)) {
-      recycleDirToCmPath(path, purge);
-    }
-    FileStatus[] statuses = fs.listStatus(path, pathFilter);
-    if (statuses == null || statuses.length == 0) {
-      return;
-    }
-    if (Utilities.FILE_OP_LOGGER.isTraceEnabled()) {
-      String s = "Deleting files under " + path + " for replace: ";
-      for (FileStatus file : statuses) {
-        s += file.getPath().getName() + ", ";
-      }
-      Utilities.FILE_OP_LOGGER.trace(s);
-    }
-
-    if (!trashFiles(fs, statuses, conf, purge)) {
-      throw new HiveException("Old path " + path + " has not been cleaned up.");
-    }
-  }
-
 
   /**
    * Trashes or deletes all files under a directory. Leaves the directory as is.
