@@ -13,7 +13,8 @@ echo "n" | sdk install java 17.0.17-amzn
 echo "y" | sdk install java 8.0.472-amzn
 
 echo "=== Installing Maven ==="
-echo "y" | sdk install maven 3.9.12
+echo "y" | sdk install maven 3.8.8
+echo "n" | sdk install maven 3.9.12
 echo "n" | sdk install maven 3.6.3
 
 echo "=== Installing Just (task runner) ==="
