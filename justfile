@@ -85,20 +85,69 @@ clean:
     mvn clean
 
 # Build entire project with distribution package
-build-dist:
-    mvn clean install -Pdist -Dtar -DskipTests=true -Dmaven.javadoc.skip=true
-
-# Build entire project (standard)
-build:
-    mvn clean install -DskipTests=true
+build-without-tests:
+    echo "=== building without tests ==="
+    #mvn clean install -Pdist -Dtar -DskipTests=true -Dmaven.javadoc.skip=true
 
 # Build with tests (slower, comprehensive)
 build-with-tests:
-    mvn clean install -Dmaven.javadoc.skip=true
+    echo "=== building with tests ==="
+    # mvn clean install -Pdist -Dtar -Dmaven.javadoc.skip=true
 
-# Fast build - skip javadoc and tests
-build-fast:
-    mvn install -DskipTests=true -Dmaven.javadoc.skip=true -DskipITs=true
+build-dist: build-with-tests
+    #!/bin/bash
+    file_name="apache-hive-3.1.3-bin.tar.gz"
+    tar_generation_dir="hive_build_dist"
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    gdp_tar_name="apache-hive-3.1.3-bin-gdp-${ts}.tar.gz"
+    echo "=== building tar ${gdp_tar_name} ==="
+    if [ ! -f ./packaging/target/${file_name} ]; then \
+      echo "ERROR: ./packaging/target/${file_name} is still missing after build"; \
+      exit 2; \
+    fi
+    echo "=== Re-creating gdp tar ==="
+    rm -rf ./${tar_generation_dir}
+    mkdir ./${tar_generation_dir}
+    cp ./packaging/target/apache-hive-3.1.3-bin.tar.gz ./${tar_generation_dir}/
+    cd ./${tar_generation_dir}
+    tar -zxvf apache-hive-3.1.3-bin.tar.gz
+    rm apache-hive-3.1.3-bin.tar.gz
+    echo "=== creating gdp tar ==="
+    tar --numeric-owner --owner=1000 --group=1000 --mode=0754 -czf "${gdp_tar_name}" apache-hive-3.1.3-bin
+    cd ../
+    mv ./${tar_generation_dir}/${gdp_tar_name} ./
+    rm -rf ./${tar_generation_dir}
+    echo "=== gdp tar created ==="
+
+
+aws-login:
+    #!/bin/bash
+    if aws sts get-caller-identity --profile=default-engineering &> /dev/null; then
+      echo "Already logged in"
+    else
+      aws sso login --profile=default-engineering
+    fi
+
+upload-tar bucket_name='6si-customers-adhoc' prefix='big_data/resources/': aws-login
+    #!/bin/bash
+    if [ -z "{{bucket_name}}" ]; then
+      echo "ERROR: bucket_name is required";
+      echo "Usage: just upload-tar <bucket_name> [prefix]";
+      exit 2;
+    fi
+    file="$(ls -1t apache-hive-3.1.3-bin-gdp-*.tar.gz 2>/dev/null | head -1)"
+    if [ -z "${file}" ]; then
+      echo "ERROR: No GDP tar found in current directory (expected apache-hive-3.1.3-bin-gdp-*.tar.gz)";
+      exit 2;
+    fi
+    p="{{prefix}}"
+    if [ -n "${p}" ] && [ "${p: -1}" != "/" ]; then
+      p="${p}/"
+    fi
+    dest="s3://{{bucket_name}}/${p}$(basename "${file}")"
+    echo "Uploading ${file} -> ${dest}"
+    aws s3 cp "${file}" "${dest}"  --profile=default-engineering
+
 
 # ============================================================================
 # Module-specific Build Tasks
@@ -160,17 +209,6 @@ findbugs:
 validate:
     mvn validate
 
-# ============================================================================
-# IDE Setup
-# ============================================================================
-
-# Generate Eclipse project files
-eclipse:
-    mvn eclipse:clean eclipse:eclipse
-
-# Generate IntelliJ IDEA project files
-idea:
-    mvn idea:idea
 
 # ============================================================================
 # Utility Tasks

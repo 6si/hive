@@ -14,8 +14,6 @@ echo "y" | sdk install java 8.0.472-amzn
 
 echo "=== Installing Maven ==="
 echo "y" | sdk install maven 3.8.8
-echo "n" | sdk install maven 3.9.12
-echo "n" | sdk install maven 3.6.3
 
 echo "=== Installing Just (task runner) ==="
 # Install just from GitHub releases
@@ -59,26 +57,45 @@ fi
 echo "=== Installing AWS tools ==="
 # Install AWS CLI and assume role helper
 sudo apt-get update && sudo apt-get install -y \
-    awscli \
     jq \
     curl \
     git || true
+
+# Install aws cli
+
+echo "=== Installing AWS CLI ==="
+sudo apt-get update && sudo apt-get install -y unzip || true
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/home/vscode/awscliv2.zip"
+unzip /home/vscode/awscliv2.zip -d /home/vscode
+sudo /home/vscode/aws/install
+rm -f /home/vscode/awscliv2.zip
+mkdir -p ~/.aws
+if [ -f "/workspaces/hive/.devcontainer/aws-config" ]; then
+    cp /workspaces/hive/.devcontainer/aws-config ~/.aws/config
+else
+    echo "Warning: /workspaces/hive/.devcontainer/aws-config not found; skipping AWS config copy"
+fi
 
 echo "=== Setting bash as default shell ==="
 sudo chsh -s /bin/bash vscode 2>/dev/null || true
 
 echo "=== Configuring bash prompt ==="
-if ! grep -q 'DEVPOD_WORKSPACE_ID' /home/vscode/.bashrc; then
+PROMPT_FILE_SRC="/workspaces/hive/.devcontainer/bash_additional.sh"
+PROMPT_FILE_DST="/home/vscode/.bash_additional.sh"
+
+if [ -f "${PROMPT_FILE_SRC}" ]; then
+    cp "${PROMPT_FILE_SRC}" "${PROMPT_FILE_DST}"
+    chown vscode:vscode "${PROMPT_FILE_DST}" 2>/dev/null || true
+    chmod 0644 "${PROMPT_FILE_DST}" 2>/dev/null || true
+fi
+
+if ! grep -q 'bash_additional\.sh' /home/vscode/.bashrc; then
     cat >> /home/vscode/.bashrc << 'EOF'
 
-# Custom prompt for dev environments
-if [ -n "$DEVPOD_WORKSPACE_ID" ]; then
-    export PS1="\[\e[32m\]\u@\h\[\e[33m\]($PLAYGROUND_NAME)\[\e[34m\]:\w\[\e[0m\]\$ "
-else
-    export PS1="\[\e[32m\]\u@\h:\[\e[34m\]\w\[\e[0m\]\$ "
+if [ -f "$HOME/.bash_additional.sh" ]; then
+  source "$HOME/.bash_additional.sh"
 fi
 EOF
-    echo "Bash prompt configured"
 fi
 
 echo "=== Pre-fetching some Hive dependencies ==="
@@ -89,5 +106,6 @@ if [ -d "/workspaces/hive" ]; then
 else
     echo "Workspace not yet available, skipping dependency pre-fetch"
 fi
+# copy aws config
 
 echo "=== Setup complete ==="

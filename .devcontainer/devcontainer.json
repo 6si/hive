@@ -7,7 +7,7 @@
   },
   // Force running the container as linux/amd64 via Docker run args
   "runArgs": ["--platform=linux/amd64"],
-
+  
   "features": {
     // Installs SDKMAN and multiple Java versions
     // 1. Install multiple JDKs (8, 11, 17, 21)
@@ -27,6 +27,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "GitHub.vscode-pull-request-github",
         "vscjava.vscode-java-pack",
         "vscjava.vscode-maven",
         "vscjava.vscode-java-dependency",
@@ -38,7 +39,10 @@
           { "name": "JavaSE-1.8", "path": "/usr/local/sdkman/candidates/java/8.0.402-amzn" },
           { "name": "JavaSE-11", "path": "/usr/local/sdkman/candidates/java/11.0.22-amzn" },
           { "name": "JavaSE-17", "path": "/usr/local/sdkman/candidates/java/17.0.10-amzn", "default": true }
-        ]
+        ],
+        "files.watcherExclude": {
+					"**/target/**": true
+				}
       }
     }
   },

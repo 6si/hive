@@ -32,3 +32,6 @@ itests/hive-blobstore/src/test/resources/blobstore-conf.xml
 patchprocess
 standalone-metastore/src/gen/version
 dependency-reduced-pom.xml
+apache-hive-3.1.3-bin-gdp-*.tar.gz
+hive_build_dist/
+.devcontainer/.devpod-internal/
