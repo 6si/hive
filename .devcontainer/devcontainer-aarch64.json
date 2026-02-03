@@ -1,18 +1,11 @@
 {
-  // Devcontainer config for x86_64 (amd64) development
-  "name": "Apache Hive Development (Multi-JDK, x86_64)",
-  // CHANGE: Use 'build' instead of 'image'
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
-  // Force running the container as linux/amd64 via Docker run args
-  "runArgs": ["--platform=linux/amd64"],
-
+  "name": "Apache Hive Development (Multi-JDK)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
   "features": {
     // Installs SDKMAN and multiple Java versions
     // 1. Install multiple JDKs (8, 11, 17, 21)
     "ghcr.io/devcontainers/features/java:1": {
-      "version": "17",
+      "version": "17", 
       "installMaven": "true",
       "installGradle": "false",
       "jdkDistro": "amzn"
@@ -23,7 +16,6 @@
       "configureZshAsDefaultShell": "true"
     }
   },
-
   "customizations": {
     "vscode": {
       "extensions": [
@@ -42,7 +34,6 @@
       }
     }
   },
-
   "postCreateCommand": "bash .devcontainer/setup-hivedev.sh",
   "remoteUser": "vscode"
 }

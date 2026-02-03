@@ -20,9 +20,9 @@ echo "=== Installing Just (task runner) ==="
 # Install just from GitHub releases
 JUST_VERSION=$(curl -s https://api.github.com/repos/casey/just/releases/latest | grep tag_name | head -1 | cut -d'"' -f4)
 if [ -z "$JUST_VERSION" ]; then
-    JUST_VERSION="1.28.0"
+    JUST_VERSION="1.46.0"
 fi
-JUST_URL="https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+JUST_URL="https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
 wget -q -O /tmp/just.tar.gz "$JUST_URL" && tar -xzf /tmp/just.tar.gz -C /tmp && sudo mv /tmp/just /usr/local/bin/ && rm /tmp/just.tar.gz || echo "Warning: Could not install just"
 
 echo "=== Fixing pentaho-aggdesigner-algorithm dependency ==="
