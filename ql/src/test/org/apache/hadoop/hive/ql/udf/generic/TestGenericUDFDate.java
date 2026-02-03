@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -51,6 +51,45 @@ public class TestGenericUDFDate extends TestCase {
     DeferredObject[] nullArgs = { new DeferredJavaObject(null) };
     output = (DateWritableV2) udf.evaluate(nullArgs);
     assertNull("to_date() with null STRING", output);
+  }
+
+  public void testIsoStringToDate() throws HiveException {
+    GenericUDFDate udf = new GenericUDFDate();
+    ObjectInspector valueOI = PrimitiveObjectInspectorFactory.javaStringObjectInspector;
+    ObjectInspector[] arguments = {valueOI};
+
+    udf.initialize(arguments);
+    DeferredObject valueObj = new DeferredJavaObject(new Text("2026-01-19T19:20:59Z"));
+    DeferredObject[] args = {valueObj};
+    DateWritableV2 output = (DateWritableV2) udf.evaluate(args);
+
+    assertEquals("to_date() test for ISO STRING failed ", "2026-01-19", output.toString());
+  }
+
+  public void testIsoStringNoZoneToDate() throws HiveException {
+    GenericUDFDate udf = new GenericUDFDate();
+    ObjectInspector valueOI = PrimitiveObjectInspectorFactory.javaStringObjectInspector;
+    ObjectInspector[] arguments = {valueOI};
+
+    udf.initialize(arguments);
+    DeferredObject valueObj = new DeferredJavaObject(new Text("2026-01-19T19:20:59"));
+    DeferredObject[] args = {valueObj};
+    DateWritableV2 output = (DateWritableV2) udf.evaluate(args);
+
+    assertEquals("to_date() test for ISO STRING without zone failed ", "2026-01-19", output.toString());
+  }
+
+  public void testIsoStringWithNumericTimezoneOffsetToDate() throws HiveException {
+    GenericUDFDate udf = new GenericUDFDate();
+    ObjectInspector valueOI = PrimitiveObjectInspectorFactory.javaStringObjectInspector;
+    ObjectInspector[] arguments = {valueOI};
+
+    udf.initialize(arguments);
+    DeferredObject valueObj = new DeferredJavaObject(new Text("2026-01-20T14:20:59+05:30"));  // IST timezone
+    DeferredObject[] args = {valueObj};
+    DateWritableV2 output = (DateWritableV2) udf.evaluate(args);
+
+    assertEquals("to_date() test for ISO STRING without zone failed ", "2026-01-20", output.toString());
   }
 
   public void testTimestampToDate() throws HiveException {

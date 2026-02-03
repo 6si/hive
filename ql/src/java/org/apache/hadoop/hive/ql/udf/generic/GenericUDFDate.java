@@ -112,7 +112,20 @@ public class GenericUDFDate extends GenericUDF {
       if (dateParser.parseDate(dateString, date)) {
         output.set(date);
       } else {
-        return null;
+        String s = dateString.trim();
+        // Normalize ISO-like datetime strings: replace 'T' with space and strip
+        // trailing timezone designators like 'Z' or '+HH:MM' / '+HHMM' / '+HH'
+        s = s.replace('T', ' ');
+        // Strip trailing Z
+        s = s.replaceAll("Z$", "");
+        // Strip trailing timezone offsets like +00:00 or -0800 or +05
+        s = s.replaceAll("([+-]\\d{2}:?\\d{2})$", "");
+        s = s.replaceAll("([+-]\\d{2})$", "");
+        if (dateParser.parseDate(s, date)) {
+          output.set(date);
+        } else {
+          return null;
+        }
       }
       break;
     case TIMESTAMP:
