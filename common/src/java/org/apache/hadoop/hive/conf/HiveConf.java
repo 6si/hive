@@ -1852,9 +1852,10 @@ public class HiveConf extends Configuration {
         "When the average output file size of a job is less than this number, Hive will start an additional \n" +
         "map-reduce job to merge the output files into bigger files. This is only done for map-only jobs \n" +
         "if hive.merge.mapfiles is true, and for map-reduce jobs if hive.merge.mapredfiles is true."),
-    HIVEMERGEFORCEMERGFILES("hive.merge.force", false,
-        "When set to true, merge will be triggered unconditionally without checking the average file size. \n" +
-        "This is useful for blobstores like S3 where listing files to calculate average size is expensive. \n" +
+    HIVEMERGEFORCEIFS3("hive.merge.files.force.if.s3", false,
+        "When set to true and the output filesystem is S3 (s3a/s3n/s3), merge will be triggered \n" +
+        "unconditionally without checking the average file size. This avoids expensive S3 list operations \n" +
+        "when there are thousands of small files. For HDFS or other filesystems, behavior remains unchanged. \n" +
         "When false (default), merge decision is based on hive.merge.smallfiles.avgsize threshold."),
     HIVEMERGERCFILEBLOCKLEVEL("hive.merge.rcfile.block.level", true, ""),
     HIVEMERGEORCFILESTRIPELEVEL("hive.merge.orcfile.stripe.level", true,

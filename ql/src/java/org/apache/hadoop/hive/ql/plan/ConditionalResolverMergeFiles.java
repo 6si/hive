@@ -124,7 +124,7 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
     long trgtSize = conf.getLongVar(HiveConf.ConfVars.HIVEMERGEMAPFILESSIZE);
     long avgConditionSize = conf
         .getLongVar(HiveConf.ConfVars.HIVEMERGEMAPFILESAVGSIZE);
-    boolean forceMerge = conf.getBoolVar(HiveConf.ConfVars.HIVEMERGEFORCEMERGFILES);
+    boolean forceMergeIfS3 = conf.getBoolVar(HiveConf.ConfVars.HIVEMERGEFORCEIFS3);
     trgtSize = Math.max(trgtSize, avgConditionSize);
 
     Task<? extends Serializable> mvTask = ctx.getListTasks().get(0);
@@ -166,14 +166,14 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
           int numDPCols = dpCtx.getNumDPCols();
           int dpLbLevel = numDPCols + lbLevel;
 
-          generateActualTasks(conf, resTsks, trgtSize, avgConditionSize, forceMerge, mvTask, mrTask,
+          generateActualTasks(conf, resTsks, trgtSize, avgConditionSize, forceMergeIfS3, mvTask, mrTask,
               mrAndMvTask, dirPath, inpFs, ctx, work, dpLbLevel);
         } else { // no dynamic partitions
           if(lbLevel == 0) {
             // static partition without list bucketing
-            long totalSz = getMergeSize(inpFs, dirPath, avgConditionSize, forceMerge);
+            long totalSz = getMergeSize(inpFs, dirPath, avgConditionSize, forceMergeIfS3);
             Utilities.FILE_OP_LOGGER.debug("merge resolve simple case - totalSz " + totalSz + " from " + dirPath
-                + ", forceMerge=" + forceMerge);
+                + ", forceMergeIfS3=" + forceMergeIfS3);
 
             if (totalSz >= 0) { // add the merge job
               setupMapRedWork(conf, work, trgtSize, totalSz);
@@ -183,7 +183,7 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
             }
           } else {
             // static partition and list bucketing
-            generateActualTasks(conf, resTsks, trgtSize, avgConditionSize, forceMerge, mvTask, mrTask,
+            generateActualTasks(conf, resTsks, trgtSize, avgConditionSize, forceMergeIfS3, mvTask, mrTask,
                 mrAndMvTask, dirPath, inpFs, ctx, work, lbLevel);
           }
         }
@@ -227,7 +227,7 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
    * @throws IOException
    */
   private void generateActualTasks(HiveConf conf, List<Task<? extends Serializable>> resTsks,
-      long trgtSize, long avgConditionSize, boolean forceMerge, Task<? extends Serializable> mvTask,
+      long trgtSize, long avgConditionSize, boolean forceMergeIfS3, Task<? extends Serializable> mvTask,
       Task<? extends Serializable> mrTask, Task<? extends Serializable> mrAndMvTask, Path dirPath,
       FileSystem inpFs, ConditionalResolverMergeFilesCtx ctx, MapWork work, int dpLbLevel)
       throws IOException {
@@ -258,7 +258,7 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
     // list of paths that don't need to merge but need to move to the dest location
     List<Path> toMove = new ArrayList<Path>();
     for (int i = 0; i < status.length; ++i) {
-      long len = getMergeSize(inpFs, status[i].getPath(), avgConditionSize, forceMerge);
+      long len = getMergeSize(inpFs, status[i].getPath(), avgConditionSize, forceMergeIfS3);
       if (len >= 0) {
         doMerge = true;
         totalSz += len;
@@ -404,15 +404,15 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
    * @param inpFs input file system.
    * @param dirPath input file directory.
    * @param avgSize threshold of average file size.
-   * @param forceMerge if true, skip avg size check and always trigger merge (useful for blobstores).
+   * @param forceMergeIfS3 if true and filesystem is S3, skip avg size check and always trigger merge.
    * @return -1 if not need to merge (either because of there is only 1 file or the
    * average size is larger than avgSize). Otherwise the size of the total size of files.
    * If return value is 0 that means there are multiple files each of which is an empty file.
    * This could be true when the table is bucketized and all buckets are empty.
    */
-  private long getMergeSize(FileSystem inpFs, Path dirPath, long avgSize, boolean forceMerge) {
-    if (forceMerge) {
-      Utilities.FILE_OP_LOGGER.debug("Force merge enabled, unconditionally triggering merge for " + dirPath);
+  private long getMergeSize(FileSystem inpFs, Path dirPath, long avgSize, boolean forceMergeIfS3) {
+    if (forceMergeIfS3 && isS3FileSystem(inpFs)) {
+      Utilities.FILE_OP_LOGGER.debug("Force merge enabled for S3, unconditionally triggering merge for " + dirPath);
       return 1;
     }
 
@@ -429,5 +429,12 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
       return averageSize.getTotalSize();
     }
     return -1;
+  }
+
+  private boolean isS3FileSystem(FileSystem fs) {
+    String scheme = fs.getUri().getScheme();
+    return scheme != null && (scheme.equalsIgnoreCase("s3a") 
+        || scheme.equalsIgnoreCase("s3n") 
+        || scheme.equalsIgnoreCase("s3"));
   }
 }
