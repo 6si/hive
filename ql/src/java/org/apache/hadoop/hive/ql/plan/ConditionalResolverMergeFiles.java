@@ -257,8 +257,19 @@ public class ConditionalResolverMergeFiles implements ConditionalResolver,
     boolean doMerge = false;
     // list of paths that don't need to merge but need to move to the dest location
     List<Path> toMove = new ArrayList<Path>();
+
+    // When forceMergeIfS3 is true and filesystem is S3, skip per-file size checks
+    // to avoid expensive S3 operations. All files will be merged unconditionally.
+    boolean skipPerFileCheck = forceMergeIfS3 && isS3FileSystem(inpFs);
+
     for (int i = 0; i < status.length; ++i) {
-      long len = getMergeSize(inpFs, status[i].getPath(), avgConditionSize, forceMergeIfS3);
+      long len;
+      if (skipPerFileCheck) {
+        // For S3 with force merge, assume all paths need merging without checking
+        len = 1;
+      } else {
+        len = getMergeSize(inpFs, status[i].getPath(), avgConditionSize, forceMergeIfS3);
+      }
       if (len >= 0) {
         doMerge = true;
         totalSz += len;
