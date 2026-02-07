@@ -41,6 +41,7 @@ public class MoveWork implements Serializable {
   private PathOutputCommitterWork pathOutputCommitterWork;
   private boolean checkFileFormat;
   private boolean srcLocal;
+  private boolean needCleanTarget;
 
   /**
    * ReadEntitites that are passed to the hooks.

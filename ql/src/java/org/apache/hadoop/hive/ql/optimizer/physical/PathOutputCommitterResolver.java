@@ -272,7 +272,7 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
 
     // Since the Hive-PathOutputCommitter integration is done manually (e.g. not through a
     // framework such as MR or Spark) there is no auto-assigned staging ID, so we add one ourselves
-    hconf.set(InternalCommitterConstants.FS_S3A_COMMITTER_STAGING_UUID, UUID.randomUUID().toString());
+    hconf.set("fs.s3a.committer.staging.uuid", UUID.randomUUID().toString());
   }
 
   // Somewhat copied from TaskCompiler, which uses similar logic to get the default location for

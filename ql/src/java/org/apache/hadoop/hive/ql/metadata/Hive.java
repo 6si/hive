@@ -2248,7 +2248,7 @@ private void constructOneLBLocationMap(FileStatus fSta,
 
               // load the partition
               Partition newPartition = loadPartition(partPath, tbl, fullPartSpec, loadFileType,
-                  true, false, numLB > 0, false, isAcid, hasFollowingStatsTask, writeId, stmtId,
+                  true, false, numLB > 0, isAcid, hasFollowingStatsTask, writeId, stmtId,
                   isInsertOverwrite, dataCommitter);
               partitionsMap.put(fullPartSpec, newPartition);
 
@@ -3627,6 +3627,83 @@ private void constructOneLBLocationMap(FileStatus fSta,
     } else {
       return new HiveException(msg, e);
     }
+  }
+
+  /**
+   * If moving across different FileSystems or different encryption zone, need to do a File copy instead of rename.
+   */
+  static private boolean needToCopy(Path srcf, Path destf, FileSystem srcFs,
+                                    FileSystem destFs, String configuredOwner, boolean isManaged) throws HiveException {
+    //Check if different FileSystems
+    if (!FileUtils.equalsFileSystem(srcFs, destFs)) {
+      return true;
+    }
+
+    if (isManaged && !configuredOwner.isEmpty() && srcFs instanceof DistributedFileSystem) {
+      // Need some extra checks
+      // Get the running owner
+      FileStatus srcs;
+
+      try {
+        srcs = srcFs.getFileStatus(srcf);
+        String runningUser = UserGroupInformation.getLoginUser().getShortUserName();
+        boolean isOwned = FileUtils.isOwnerOfFileHierarchy(srcFs, srcs, configuredOwner, false);
+        if (configuredOwner.equals(runningUser)) {
+          // Check if owner has write permission, else it will have to copy
+          if (!(isOwned &&
+              FileUtils.isActionPermittedForFileHierarchy(
+                  srcFs, srcs, configuredOwner, FsAction.WRITE, false))) {
+            return true;
+          }
+        } else {
+          // If the configured owner does not own the file, throw
+          if (!isOwned) {
+            throw new HiveException("Load Data failed for " + srcf + " as the file is not owned by "
+            + configuredOwner + " and load data is also not ran as " + configuredOwner);
+          } else {
+            return true;
+          }
+        }
+      } catch (IOException e) {
+        throw new HiveException("Could not fetch FileStatus for source file");
+      } catch (HiveException e) {
+        throw new HiveException(e);
+      } catch (Exception e) {
+        throw new HiveException(" Failed in looking up Permissions on file + " + srcf);
+      }
+    }
+
+    //Check if different encryption zones
+    HadoopShims.HdfsEncryptionShim srcHdfsEncryptionShim = SessionState.get().getHdfsEncryptionShim(srcFs);
+    HadoopShims.HdfsEncryptionShim destHdfsEncryptionShim = SessionState.get().getHdfsEncryptionShim(destFs);
+    try {
+      return srcHdfsEncryptionShim != null
+          && destHdfsEncryptionShim != null
+          && (srcHdfsEncryptionShim.isPathEncrypted(srcf) || destHdfsEncryptionShim.isPathEncrypted(destf))
+          && !srcHdfsEncryptionShim.arePathsOnSameEncryptionZone(srcf, destf, destHdfsEncryptionShim);
+    } catch (IOException e) {
+      throw new HiveException(e);
+    }
+  }
+
+  static private HiveException handlePoolException(ExecutorService pool, Exception e) {
+    HiveException he = null;
+
+    if (e instanceof HiveException) {
+      he = (HiveException) e;
+      if (he.getCanonicalErrorMsg() != ErrorMsg.GENERIC_ERROR) {
+        if (he.getCanonicalErrorMsg() == ErrorMsg.UNRESOLVED_RT_EXCEPTION) {
+          LOG.error("Failed to move: {}", he.getMessage());
+        } else {
+          LOG.error("Failed to move: {}", he.getRemoteErrorMsg());
+        }
+      }
+    } else {
+      LOG.error("Failed to move: {}", e.getMessage());
+      he = new HiveException(e.getCause());
+    }
+    pool.shutdownNow();
+    return he;
   }
 
   public static void moveAcidFiles(FileSystem fs, FileStatus[] stats, Path dst,
