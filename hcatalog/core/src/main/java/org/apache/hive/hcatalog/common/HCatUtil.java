@@ -41,6 +41,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
@@ -755,6 +756,15 @@ public class HCatUtil {
         logger.warn(msg);
       }
       throw new IllegalArgumentException(msg);
+    }
+  }
+
+  public static boolean isS3(Path path) {
+    if (path.toString().startsWith("s3")) {
+      return true;
+    }
+    else {
+      return false;
     }
   }
 }

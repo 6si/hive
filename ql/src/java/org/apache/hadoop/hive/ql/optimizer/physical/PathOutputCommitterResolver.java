@@ -34,6 +34,7 @@ import org.apache.hadoop.hive.ql.exec.Task;
 import org.apache.hadoop.hive.ql.exec.TaskFactory;
 import org.apache.hadoop.hive.ql.exec.mr.MapRedTask;
 import org.apache.hadoop.hive.ql.exec.spark.SparkTask;
+import org.apache.hadoop.hive.ql.exec.tez.TezTask;
 import org.apache.hadoop.hive.ql.lib.Dispatcher;
 import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.hadoop.hive.ql.lib.TaskGraphWalker;
@@ -167,6 +168,10 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
       for (BaseWork work : ((SparkTask) task).getWork().getAllWork()) {
         fsOps.addAll(work.getAllOperators());
       }
+    } else if (task instanceof TezTask) {
+      for (BaseWork work : ((TezTask) task).getWork().getAllWork()) {
+        fsOps.addAll(work.getAllOperators());
+      }
     }
     return fsOps.stream()
             .filter(FileSinkOperator.class::isInstance)
@@ -182,13 +187,29 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
     Task<MoveWork> mvTask = GenMapRedUtils.findMoveTaskForFsopOutput(sinkMoveTasks,
             fileSinkDesc.getFinalDirName(), fileSinkDesc.isMmTable());
 
+    LOG.info("PathOutputCommitterResolver: Processing FsOp with finalDirName={}, isMmTable={}, mvTask={}",
+            fileSinkDesc.getFinalDirName(), fileSinkDesc.isMmTable(), mvTask);
+
     if (mvTask != null) {
 
       MoveWork mvWork = mvTask.getWork();
 
       // Don't process the mvTask if it requires committing data for DP queries
-      if (mvWork.getLoadMultiFilesWork() == null && (mvWork.getLoadTableWork() == null || mvWork
-              .getLoadTableWork().getDPCtx() == null)) {
+      boolean hasLoadMultiFiles = mvWork.getLoadMultiFilesWork() != null;
+      boolean hasLoadTableWithDP = mvWork.getLoadTableWork() != null && mvWork.getLoadTableWork().getDPCtx() != null;
+      LOG.info("PathOutputCommitterResolver: hasLoadMultiFiles={}, hasLoadTableWithDP={}, loadFileWork={}, loadTableWork={}",
+              hasLoadMultiFiles, hasLoadTableWithDP, mvWork.getLoadFileWork(), mvWork.getLoadTableWork());
+
+      // Throw exception if dynamic partitioning is used with blobstore output committer
+      // Magic committer does not support dynamic partitioning due to JobID mismatch issues with Tez
+      // See HADOOP-19091 and HIVE-19321 for details
+      if (hasLoadTableWithDP || hasLoadMultiFiles) {
+        throw new SemanticException("Magic committer (hive.blobstore.use.output-committer=true) " +
+                "is not supported with dynamic partitioning. Either set hive.blobstore.use.output-committer=false " +
+                "or use static partitioning. See HADOOP-19091 and HIVE-19321 for details.");
+      }
+
+      if (!hasLoadMultiFiles && !hasLoadTableWithDP) {
 
         // The final output path we will commit data to
         Path outputPath = null;
@@ -210,9 +231,13 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
           outputPath = getLoadTableOutputPath(mvWork);
         }
         if (outputPath != null) {
-          if (BlobStorageUtils.isBlobStoragePath(hconf, outputPath) && hconf.get(
-                  String.format(PathOutputCommitterFactory.COMMITTER_FACTORY_SCHEME_PATTERN,
-                          outputPath.toUri().getScheme())) != null) {
+          boolean isBlobPath = BlobStorageUtils.isBlobStoragePath(hconf, outputPath);
+          String committerFactory = hconf.get(String.format(PathOutputCommitterFactory.COMMITTER_FACTORY_SCHEME_PATTERN,
+                  outputPath.toUri().getScheme()));
+          LOG.info("PathOutputCommitterResolver: outputPath={}, isBlobPath={}, committerFactory={}",
+                  outputPath, isBlobPath, committerFactory);
+
+          if (isBlobPath && committerFactory != null) {
 
             // All s3a specific logic should be place in the method below, for all filesystems or
             // output committer implementations, a similar pattern should be followed

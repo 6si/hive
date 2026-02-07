@@ -151,6 +151,10 @@ public class FosterStorageHandler extends DefaultStorageHandler {
         HCatUtil.deserialize(tableDesc.getJobProperties().get(
           HCatConstants.HCAT_KEY_OUTPUT_INFO));
       String parentPath = jobInfo.getTableInfo().getTableLocation();
+      boolean isMagic = false;
+      if (parentPath.startsWith("s3")) {
+        isMagic = true;
+      }
       String dynHash = tableDesc.getJobProperties().get(
         HCatConstants.HCAT_DYNAMIC_PTN_JOBID);
       String idHash = tableDesc.getJobProperties().get(
@@ -165,9 +169,13 @@ public class FosterStorageHandler extends DefaultStorageHandler {
             && jobInfo.getCustomDynamicRoot().length() > 0) {
           parentPath = new Path(parentPath, jobInfo.getCustomDynamicRoot()).toString();
         }
-        parentPath = new Path(parentPath, FileOutputCommitterContainer.DYNTEMP_DIR_NAME + dynHash).toString();
+        if (!isMagic) {
+          parentPath = new Path(parentPath, FileOutputCommitterContainer.DYNTEMP_DIR_NAME + dynHash).toString();
+        }
       } else {
-        parentPath = new Path(parentPath,FileOutputCommitterContainer.SCRATCH_DIR_NAME + idHash).toString();
+        if (!isMagic) {
+          parentPath = new Path(parentPath,FileOutputCommitterContainer.SCRATCH_DIR_NAME + idHash).toString();
+        }
       }
 
       String outputLocation;
@@ -183,10 +191,20 @@ public class FosterStorageHandler extends DefaultStorageHandler {
            && Boolean.parseBoolean((String)tableDesc.getProperties().get("EXTERNAL"))
            && jobInfo.getLocation() != null && jobInfo.getLocation().length() > 0) {
         // honor custom location for external table apart from what metadata specifies
-        outputLocation = jobInfo.getLocation();
+        if (!isMagic) {
+          outputLocation = jobInfo.getLocation();
+        }
+        else {
+          outputLocation = jobInfo.getLocation() + "/__magic";
+        }
       } else if (dynHash == null && jobInfo.getPartitionValues().size() == 0) {
         // Unpartitioned table, writing to the scratch dir directly is good enough.
-        outputLocation = "";
+        if (!isMagic) {
+          outputLocation = "";
+        }
+        else {
+          outputLocation = "__magic";
+        }
       } else {
         List<String> cols = new ArrayList<String>();
         List<String> values = new ArrayList<String>();
