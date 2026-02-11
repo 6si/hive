@@ -92,14 +92,23 @@ build-without-tests:
 # Build with tests (slower, comprehensive)
 build-with-tests:
     echo "=== building with tests ==="
-    # mvn clean install -Pdist -Dtar -Dmaven.javadoc.skip=true
+    mvn clean install -Pdist -Dtar -Dmaven.javadoc.skip=true
 
 build-dist: build-with-tests
     #!/bin/bash
     file_name="apache-hive-3.1.3-bin.tar.gz"
     tar_generation_dir="hive_build_dist"
     ts="$(date -u +%Y%m%dT%H%M%SZ)"
-    gdp_tar_name="apache-hive-3.1.3-bin-gdp-${ts}.tar.gz"
+    branch="no-branch"
+    commit="no-commit"
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      branch="$(git branch --show-current 2>/dev/null || true)"
+      commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    fi
+    if [ -z "${branch}" ]; then branch="no-branch"; fi
+    if [ -z "${commit}" ]; then commit="no-commit"; fi
+    branch_sanitized="${branch//\//-}"
+    gdp_tar_name="apache-hive-3.1.3-bin-gdp-${branch_sanitized}-${commit}-${ts}.tar.gz"
     echo "=== building tar ${gdp_tar_name} ==="
     if [ ! -f ./packaging/target/${file_name} ]; then \
       echo "ERROR: ./packaging/target/${file_name} is still missing after build"; \
