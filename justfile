@@ -1,9 +1,5 @@
 # Hive Development Build and Management Tasks
 
-## Variables
-main_hive2_branch := "6si-main"
-main_hive3_branch := "6si-hive3-main"
-
 set shell := ["bash", "-c"]
 
 # Default recipe - show help
@@ -91,7 +87,7 @@ clean:
 # Build entire project with distribution package
 build-without-tests:
     echo "=== building without tests ==="
-    #mvn clean install -Pdist -Dtar -DskipTests=true -Dmaven.javadoc.skip=true
+    mvn clean install -Pdist -Dtar -DskipTests=true -Dmaven.javadoc.skip=true
 
 # Build with tests (slower, comprehensive)
 build-with-tests:
@@ -105,7 +101,7 @@ pull-main:
       branch="$(git branch --show-current 2>/dev/null || true)"
       commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
     fi
-    if [ -n "${branch}" ] && { [ "${branch}" = "${main_hive2_branch}" ] || [ "${branch}" = "${main_hive3_branch}" ]; }; then
+    if [ -n "${branch}" ] && { [ "${branch}" = "6si-main" ] || [ "${branch}" = "6si-hive3-main" ]; }; then
       echo "Current branch is ${branch}, pulling latest changes..."
       git pull origin "${branch}"
       echo "Pull completed"
