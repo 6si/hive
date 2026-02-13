@@ -219,6 +219,8 @@ public class TezCompiler extends TaskCompiler {
       new ConstantPropagate(ConstantPropagateOption.SHORTCUT).transform(procCtx.parseContext);
     }
 
+    updateBucketingVersion(procCtx);
+
   }
 
   private void runCycleAnalysisForPartitionPruning(OptimizeTezProcContext procCtx,
@@ -1447,6 +1449,34 @@ public class TezCompiler extends TaskCompiler {
         }
         deque.addAll(op.getChildOperators());
       }
+    }
+  }
+
+  /**
+   * Update bucketing version of ReduceSinkOp if exists old bucketing version table
+   * @param procCtx
+   */
+  private void updateBucketingVersion(OptimizeTezProcContext procCtx) {
+    // Fetch all the FileSinkOperators.
+    Set<ReduceSinkOperator> fsOpsAll = new HashSet<>();
+    for (TableScanOperator ts : procCtx.parseContext.getTopOps().values()){
+      Set<ReduceSinkOperator> fsOps = OperatorUtils.findOperators(ts, ReduceSinkOperator.class);
+      fsOpsAll.addAll(fsOps);
+    }
+
+    int bucketVersion = -1;
+    for (ReduceSinkOperator rsop : fsOpsAll){
+      if (rsop.getBucketingVersion() !=2 && rsop.getBucketingVersion() != 1){
+        rsop.setBucketingVersion(-1);
+      }
+      if (rsop.getBucketingVersion() > bucketVersion){
+        bucketVersion = rsop.getBucketingVersion();
+      }
+    }
+    for (Operator<? extends OperatorDesc> rsop : fsOpsAll){
+      LOG.info("tez update reduceSinkOperator name = " + rsop.getName() + ", opId = " + rsop.getOperatorId() + ", oldBucketVersion = "
+        + rsop.getBucketingVersion() + ", newBucketVersion = " + bucketVersion);
+      rsop.setBucketingVersion(bucketVersion);
     }
   }
 }

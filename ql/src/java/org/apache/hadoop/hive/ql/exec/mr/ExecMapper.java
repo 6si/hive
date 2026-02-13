@@ -19,6 +19,7 @@
 package org.apache.hadoop.hive.ql.exec.mr;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +45,7 @@ import org.apache.hadoop.mapred.Mapper;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.hadoop.hive.ql.exec.ReduceSinkOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +96,10 @@ public class ExecMapper extends MapReduceBase implements Mapper {
       // initialize map operator
       mo.initialize(job, null);
       mo.setChildren(job);
+
+      // defined self balance ReduceSinkOperator of bucketVersion
+      balanceRSOpbucketVersion(mo);
+
       l4j.info(mo.dump(0));
       // initialize map local work
       localWork = mrwork.getMapRedLocalWork();
@@ -128,6 +134,42 @@ public class ExecMapper extends MapReduceBase implements Mapper {
       }
     }
   }
+
+  /**
+   * defined-self balance ReduceSinkOperator of bucketVersion, keep values to sameness
+   * @param rootOp
+   */
+  private static void balanceRSOpbucketVersion(Operator rootOp){
+    List<Operator<? extends OperatorDesc>> needDealOps = new ArrayList<Operator<? extends OperatorDesc>>();
+    visitChildGetRSOps(rootOp, needDealOps);
+    int bucketVersion = -1;
+    for(Operator<? extends OperatorDesc> rsop : needDealOps){
+      if(rsop.getBucketingVersion() != 2 && rsop.getBucketingVersion() != 1){
+        rsop.setBucketingVersion(-1);
+      }
+      if(rsop.getBucketingVersion() > bucketVersion){
+        bucketVersion = rsop.getBucketingVersion();
+      }
+    }
+    for(Operator<? extends OperatorDesc> rsop : needDealOps){
+      l4j.info("update reduceSinkOperator name="+rsop.getName()+", opId="+rsop.getOperatorId()+", oldBucketVersion="+rsop.getBucketingVersion()+", newBucketVersion="+bucketVersion);
+      rsop.setBucketingVersion(bucketVersion);
+    }
+    needDealOps.clear();
+  }
+  private static void visitChildGetRSOps(Operator rootOp, List<Operator<? extends OperatorDesc>> needDealOps){
+    List<Operator<? extends OperatorDesc>> ops = rootOp.getChildOperators();
+    if(ops == null || ops.isEmpty()){
+      return;
+    }
+    for(Operator<? extends OperatorDesc> op : ops) {
+      if (op instanceof ReduceSinkOperator) {
+        needDealOps.add(op);
+      }
+      visitChildGetRSOps(op, needDealOps);
+    }
+  }
+
   @Override
   public void map(Object key, Object value, OutputCollector output,
       Reporter reporter) throws IOException {

@@ -1627,7 +1627,7 @@ public class Commands {
       if (username == null) {
         username = beeLine.getConsoleReader().readLine("Enter username for " + urlForPrompt + ": ");
       }
-      props.setProperty(JdbcConnectionParams.AUTH_USER, username.replace(".", "_"));
+      props.setProperty(JdbcConnectionParams.AUTH_USER, Utils.sanitizeAuthUser(username));
       if (password == null) {
         password = beeLine.getConsoleReader().readLine("Enter password for " + urlForPrompt + ": ",
           new Character('*'));

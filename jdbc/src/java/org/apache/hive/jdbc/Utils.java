@@ -218,7 +218,8 @@ public class Utils {
 
     public Map<String, String> getSessionVars() {
       if (sessionVars.containsKey(JdbcConnectionParams.AUTH_USER)) {
-	      sessionVars.put(JdbcConnectionParams.AUTH_USER, sessionVars.get(JdbcConnectionParams.AUTH_USER).replace(".","_"));
+	      sessionVars.put(JdbcConnectionParams.AUTH_USER,
+	          Utils.sanitizeAuthUser(sessionVars.get(JdbcConnectionParams.AUTH_USER)));
       }
       return sessionVars;
     }
@@ -449,7 +450,7 @@ public class Utils {
     if (!connParams.getSessionVars().containsKey(JdbcConnectionParams.AUTH_USER)) {
       if (info.containsKey(JdbcConnectionParams.AUTH_USER)) {
         connParams.getSessionVars().put(JdbcConnectionParams.AUTH_USER,
-            info.getProperty(JdbcConnectionParams.AUTH_USER).replace(".","_"));
+            Utils.sanitizeAuthUser(info.getProperty(JdbcConnectionParams.AUTH_USER)));
       }
       if (info.containsKey(JdbcConnectionParams.AUTH_PASSWD)) {
         connParams.getSessionVars().put(JdbcConnectionParams.AUTH_PASSWD,
@@ -707,6 +708,28 @@ public class Utils {
       LOG.warn("Could not retrieve canonical hostname for " + hostName, exception);
       return hostName;
     }
+  }
+
+
+  /**
+   * Sanitizes the authentication user by replacing dots with underscores.
+   * This is used to ensure compatibility with certain authentication systems
+   * that may not handle dots in usernames properly.
+   *
+   * @param user The original username string
+   * @return The sanitized username with dots replaced by underscores,
+   *         or null if the input is null
+   */
+  public static String sanitizeAuthUser(final String user) {
+    if (user == null) {
+      return null;
+    }
+    final int at = user.indexOf('@');
+    if (at < 0) {
+      return user.replace('.', '_');
+    }
+    final String localPart = user.substring(0, at).replace('.', '_');
+    return localPart + user.substring(at);
   }
 
 }
