@@ -1,5 +1,9 @@
 # Hive Development Build and Management Tasks
 
+## Variables
+main_hive2_branch := "6si-main"
+main_hive3_branch := "6si-hive3-main"
+
 set shell := ["bash", "-c"]
 
 # Default recipe - show help
@@ -94,7 +98,22 @@ build-with-tests:
     echo "=== building with tests ==="
     mvn clean install -Pdist -Dtar -Dmaven.javadoc.skip=true
 
-build-dist: build-with-tests
+pull-main:
+    #!/bin/bash
+    # pull if current is one of main branch
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      branch="$(git branch --show-current 2>/dev/null || true)"
+      commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    fi
+    if [ -n "${branch}" ] && { [ "${branch}" = "${main_hive2_branch}" ] || [ "${branch}" = "${main_hive3_branch}" ]; }; then
+      echo "Current branch is ${branch}, pulling latest changes..."
+      git pull origin "${branch}"
+      echo "Pull completed"
+    else
+      echo "Not on a main branch (current: ${branch:-no-branch}), skipping pull"
+    fi 
+
+build-dist: pull-main build-with-tests 
     #!/bin/bash
     file_name="apache-hive-3.1.3-bin.tar.gz"
     tar_generation_dir="hive_build_dist"
@@ -158,6 +177,26 @@ upload-tar bucket_name='6si-customers-adhoc' prefix='big_data/resources/': aws-l
     aws s3 cp "${file}" "${dest}"  --profile=default-engineering
 
 
+upload-jar jar_path bucket_name='6si-customers-adhoc' prefix='big_data/resources/': aws-login
+    #!/bin/bash
+    if [ -z "{{jar_path}}" ]; then
+      echo "ERROR: jar_path is required";
+      echo "Usage: just upload-jar <jar_path> [bucket_name] [prefix]";
+      exit 2;
+    fi
+    if [ ! -f "{{jar_path}}" ]; then
+      echo "ERROR: JAR file not found: {{jar_path}}";
+      exit 2;
+    fi
+    p="{{prefix}}"
+    if [ -n "${p}" ] && [ "${p: -1}" != "/" ]; then
+      p="${p}/"
+    fi
+    dest="s3://{{bucket_name}}/${p}$(basename "{{jar_path}}")"
+    echo "Uploading {{jar_path}} -> ${dest}"
+    aws s3 cp "{{jar_path}}" "${dest}"  --profile=default-engineering
+    
+
 # ============================================================================
 # Module-specific Build Tasks
 # ============================================================================
@@ -167,8 +206,14 @@ build-core:
     cd core && mvn clean install -DskipTests=true
 
 # Build QL module
-build-ql:
-    cd ql && mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true
+build-ql skip-tests="true":
+    #!/bin/bash
+    if [ "{{skip-tests}}" = "true" ]; then
+      cd ql && mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true
+    else
+      echo "=== building ql with tests ==="
+      cd ql && mvn clean install -Dmaven.javadoc.skip=true
+    fi
 
 # Build metastore module
 build-metastore:
