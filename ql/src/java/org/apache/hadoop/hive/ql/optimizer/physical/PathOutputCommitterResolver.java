@@ -103,6 +103,9 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
   public PhysicalContext resolve(PhysicalContext pctx) throws SemanticException {
     this.hconf = pctx.getConf();
 
+    LOG.info("PathOutputCommitterResolver: resolve() invoked. hive.blobstore.use.output-committer={}",
+            hconf.getBoolVar(HiveConf.ConfVars.HIVE_BLOBSTORE_USE_OUTPUTCOMMITTER));
+
     // Collect all MoveTasks and FSOPs
     TaskGraphWalker graphWalker = new TaskGraphWalker(new PathOutputCommitterDispatcher());
     List<Node> rootTasks = new ArrayList<>(pctx.getRootTasks());
@@ -112,6 +115,9 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
     List<Task<MoveWork>> sinkMoveTasks = mvTasks.stream()
             .filter(mvTask -> !containsChildTask(mvTask.getChildTasks(), MoveTask.class))
             .collect(Collectors.toList());
+
+    LOG.info("PathOutputCommitterResolver: Found {} MoveTasks, {} sinkMoveTasks, {} tasks with FsOps",
+            mvTasks.size(), sinkMoveTasks.size(), taskToFsOps.size());
 
     // Iterate through each FSOP
     for (Map.Entry<Task<?>, Collection<FileSinkOperator>> entry : taskToFsOps.entrySet()) {
@@ -268,8 +274,19 @@ public class PathOutputCommitterResolver implements PhysicalPlanResolver {
     }
   }
 
+  // Config key for sharing JobID between planning (PathOutputCommitterResolver) and execution (FileSinkOperator)
+  public static final String HIVE_MAGIC_COMMITTER_JOB_ID = "hive.magic.committer.job.id";
+
   private PathOutputCommitterWork createPathOutputCommitterWork(Path outputPath) {
-    JobID jobID = new JobID();
+    // Use a deterministic JobID so that FileSinkOperator can create matching TaskAttemptIDs.
+    // This ensures the magic committer's __magic_job-{id} paths are consistent between
+    // task writes and job commit. See HADOOP-19091.
+    JobID jobID = new JobID("", 0);
+    
+    // Store the JobID in config so FileSinkOperator can use the same one
+    hconf.set(HIVE_MAGIC_COMMITTER_JOB_ID, jobID.toString());
+    LOG.info("PathOutputCommitterResolver: Using JobID {} for magic committer", jobID);
+    
     TaskAttemptContext taskAttemptContext = createTaskAttemptContext(jobID);
     JobContext jobContext = new JobContextImpl(hconf, jobID);
 

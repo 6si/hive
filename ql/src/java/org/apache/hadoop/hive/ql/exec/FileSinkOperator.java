@@ -87,6 +87,9 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hadoop.mapreduce.TaskType;
+import org.apache.hadoop.hive.ql.exec.tez.TezContext;
+import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.hadoop.mapreduce.lib.output.PathOutputCommitter;
 import org.apache.hadoop.mapreduce.lib.output.PathOutputCommitterFactory;
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
@@ -1627,10 +1630,38 @@ public class FileSinkOperator extends TerminalOperator<FileSinkDesc> implements
   }
 
   private TaskAttemptContextImpl createTaskAttemptContext() {
-    TaskAttemptID origId = MapredContext.get().getTaskAttemptID();
-
+    // Get task and attempt info from context if available
+    int taskId = 0;
+    int attemptId = 0;
+    TaskType taskType = TaskType.MAP;
+    
+    MapredContext ctx = MapredContext.get();
+    TaskAttemptID origId = ctx != null ? ctx.getTaskAttemptID() : null;
+    if (origId != null) {
+      taskId = origId.getTaskID().getId();
+      attemptId = origId.getId();
+      taskType = origId.getTaskType();
+    } else if (ctx instanceof TezContext) {
+      // In Tez, MapredContext.getTaskAttemptID() returns null, but we can get
+      // the unique task index from TezContext's ProcessorContext
+      TezContext tezCtx = (TezContext) ctx;
+      ProcessorContext procCtx = tezCtx.getTezProcessorContext();
+      if (procCtx != null) {
+        taskId = procCtx.getTaskIndex();
+        attemptId = procCtx.getTaskAttemptNumber();
+        // Tez reducers should use REDUCE type for proper path separation
+        taskType = tezCtx.isMap() ? TaskType.MAP : TaskType.REDUCE;
+        LOG.info("Using Tez ProcessorContext for TaskAttemptID: taskIndex={}, attemptNumber={}, isMap={}",
+                taskId, attemptId, tezCtx.isMap());
+      }
+    }
+    
+    // IMPORTANT: Use empty jtIdentifier ("") and job id 0 to match what PathOutputCommitterResolver
+    // uses during planning. This ensures the magic committer's __magic_job-{id} paths are consistent
+    // between task writes and job commit. See HADOOP-19091.
+    // PathOutputCommitterResolver sets hive.magic.committer.job.id to "job__0000" (JobID("", 0))
     TaskAttemptID taskAttemptID = new TaskAttemptID(org.apache.commons.lang.StringUtils.EMPTY, 0,
-            origId.getTaskType(), origId.getTaskID().getId(), origId.getId());
+            taskType, taskId, attemptId);
 
     // We want the committer to ignore the application attempt id because there is no way to know
     // the correct value during job commit, so we force the committer to always use the default

@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 
@@ -30,6 +32,7 @@ import org.apache.hadoop.hive.ql.parse.SemanticException;
  * PhysicalPlanResolver. Each resolver has its own set of optimization rule.
  */
 public class PhysicalOptimizer {
+  private static final Logger LOG = LoggerFactory.getLogger(PhysicalOptimizer.class);
   private PhysicalContext pctx;
   private List<PhysicalPlanResolver> resolvers;
 
@@ -99,7 +102,10 @@ public class PhysicalOptimizer {
       resolvers.add(new AnnotateRunTimeStatsOptimizer());
     }
 
-    if (hiveConf.getBoolVar(HiveConf.ConfVars.HIVE_BLOBSTORE_USE_OUTPUTCOMMITTER)) {
+    boolean useOutputCommitter = hiveConf.getBoolVar(HiveConf.ConfVars.HIVE_BLOBSTORE_USE_OUTPUTCOMMITTER);
+    LOG.info("PhysicalOptimizer: hive.blobstore.use.output-committer = {}", useOutputCommitter);
+    if (useOutputCommitter) {
+      LOG.info("PhysicalOptimizer: Adding PathOutputCommitterResolver");
       resolvers.add(new PathOutputCommitterResolver());
     }
   }
