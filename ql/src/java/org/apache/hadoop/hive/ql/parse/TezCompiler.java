@@ -87,6 +87,7 @@ import org.apache.hadoop.hive.ql.optimizer.physical.LlapPreVectorizationPass;
 import org.apache.hadoop.hive.ql.optimizer.physical.MemoryDecider;
 import org.apache.hadoop.hive.ql.optimizer.physical.MetadataOnlyOptimizer;
 import org.apache.hadoop.hive.ql.optimizer.physical.NullScanOptimizer;
+import org.apache.hadoop.hive.ql.optimizer.physical.PathOutputCommitterResolver;
 import org.apache.hadoop.hive.ql.optimizer.physical.PhysicalContext;
 import org.apache.hadoop.hive.ql.optimizer.physical.SerializeFilter;
 import org.apache.hadoop.hive.ql.optimizer.physical.StageIDsRearranger;
@@ -710,6 +711,12 @@ public class TezCompiler extends TaskCompiler {
 
     if (physicalCtx.getContext().getExplainAnalyze() != null) {
       new AnnotateRunTimeStatsOptimizer().resolve(physicalCtx);
+    }
+
+    if (conf.getBoolVar(HiveConf.ConfVars.HIVE_BLOBSTORE_USE_OUTPUTCOMMITTER)) {
+      physicalCtx = new PathOutputCommitterResolver().resolve(physicalCtx);
+    } else {
+      LOG.debug("Skipping PathOutputCommitterResolver");
     }
 
     perfLogger.PerfLogEnd(this.getClass().getName(), PerfLogger.TEZ_COMPILER, "optimizeTaskPlan");

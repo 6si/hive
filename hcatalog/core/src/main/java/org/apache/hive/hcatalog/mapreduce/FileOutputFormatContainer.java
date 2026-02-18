@@ -46,6 +46,7 @@ import org.apache.hive.hcatalog.common.HCatConstants;
 import org.apache.hive.hcatalog.common.HCatException;
 import org.apache.hive.hcatalog.common.HCatUtil;
 import org.apache.hive.hcatalog.data.HCatRecord;
+import org.apache.hive.hcatalog.mapreduce.s3.commit.magic.MagicS3GuardCommitter;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
@@ -142,10 +143,18 @@ class FileOutputFormatContainer extends OutputFormatContainer {
   public OutputCommitter getOutputCommitter(TaskAttemptContext context) throws IOException, InterruptedException {
     //this needs to be manually set, under normal circumstances MR Task does this
     setWorkOutputPath(context);
-    return new FileOutputCommitterContainer(context,
-      HCatBaseOutputFormat.getJobInfo(context.getConfiguration()).isDynamicPartitioningUsed() ?
-        null :
-        new JobConf(context.getConfiguration()).getOutputCommitter());
+    if (true/*HCatUtil.isS3A(context.getConfiguration())*/) {
+      return new S3OutputCommitterContainer(context,
+              HCatBaseOutputFormat.getJobInfo(context.getConfiguration()).isDynamicPartitioningUsed() ?
+                      null :
+                      new MagicS3GuardCommitter(new Path(context.getConfiguration().get("mapred.output.dir")), context));
+    }
+    else {
+      return new FileOutputCommitterContainer(context,
+              HCatBaseOutputFormat.getJobInfo(context.getConfiguration()).isDynamicPartitioningUsed() ?
+                      null :
+                      new JobConf(context.getConfiguration()).getOutputCommitter());
+    }
   }
 
   /**
@@ -246,8 +255,15 @@ class FileOutputFormatContainer extends OutputFormatContainer {
     String outputPath = context.getConfiguration().get("mapred.output.dir");
     //we need to do this to get the task path and set it for mapred implementation
     //since it can't be done automatically because of mapreduce->mapred abstraction
-    if (outputPath != null)
-      context.getConfiguration().set("mapred.work.output.dir",
-        new FileOutputCommitter(new Path(outputPath), context).getWorkPath().toString());
+    if (outputPath != null) {
+      if (HCatUtil.isS3(new Path(outputPath))) {
+        context.getConfiguration().set("mapred.work.output.dir",
+                new MagicS3GuardCommitter(new Path(outputPath), context).getWorkPath().toString());
+      }
+      else {
+        context.getConfiguration().set("mapred.work.output.dir",
+                new FileOutputCommitter(new Path(outputPath), context).getWorkPath().toString());
+      }
+    }
   }
 }

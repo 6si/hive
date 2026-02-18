@@ -43,6 +43,7 @@ import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hive.hcatalog.common.ErrorType;
 import org.apache.hive.hcatalog.common.HCatException;
 import org.apache.hive.hcatalog.data.HCatRecord;
+import org.apache.hive.hcatalog.mapreduce.s3.commit.magic.MagicS3GuardCommitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -157,6 +158,11 @@ class DynamicPartitionFileRecordWriterContainer extends FileRecordWriterContaine
           HCatMapRedUtil.createTaskAttemptContext(context);
       configureDynamicStorageHandler(currTaskContext, dynamicPartValues);
       localJobInfo = HCatBaseOutputFormat.getJobInfo(currTaskContext.getConfiguration());
+      boolean isMagic = false;
+
+      if (localJobInfo.getLocation().startsWith("s3")) {
+        isMagic = true;
+      }
 
       // Setup serDe.
       AbstractSerDe currSerDe =
@@ -182,9 +188,11 @@ class DynamicPartitionFileRecordWriterContainer extends FileRecordWriterContaine
       // but may become an issue for cases when the method is used to perform
       // other setup tasks.
 
+      Path outputLoc = new Path(localJobInfo.getLocation());
+
       // Get Output Committer
-      org.apache.hadoop.mapred.OutputCommitter baseOutputCommitter =
-          currTaskContext.getJobConf().getOutputCommitter();
+      org.apache.hadoop.mapred.OutputCommitter baseOutputCommitter = isMagic ?
+              new MagicS3GuardCommitter(outputLoc, currTaskContext) : currTaskContext.getJobConf().getOutputCommitter();
 
       // Create currJobContext the latest so it gets all the config changes
       org.apache.hadoop.mapred.JobContext currJobContext =
@@ -199,10 +207,17 @@ class DynamicPartitionFileRecordWriterContainer extends FileRecordWriterContaine
               currTaskContext.getTaskAttemptID(), currTaskContext.getProgressible());
 
       // Set temp location.
-      currTaskContext.getConfiguration().set(
-          "mapred.work.output.dir",
-          new FileOutputCommitter(new Path(localJobInfo.getLocation()), currTaskContext)
-              .getWorkPath().toString());
+      if (isMagic) {
+        currTaskContext.getConfiguration().set(
+                "mapred.work.output.dir",
+                outputLoc.toString());
+      }
+      else {
+        currTaskContext.getConfiguration().set(
+                "mapred.work.output.dir",
+                new FileOutputCommitter(new Path(localJobInfo.getLocation()), currTaskContext)
+                        .getWorkPath().toString());
+      }
 
       // Set up task.
       baseOutputCommitter.setupTask(currTaskContext);

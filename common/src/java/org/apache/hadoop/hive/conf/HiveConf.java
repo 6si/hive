@@ -637,6 +637,9 @@ public class HiveConf extends Configuration {
     // Metastore stuff. Be sure to update HiveConf.metaVars when you add something here!
     METASTOREDBTYPE("hive.metastore.db.type", "DERBY", new StringSet("DERBY", "ORACLE", "MYSQL", "MSSQL", "POSTGRES"),
         "Type of database used by the metastore. Information schema & JDBCStorageHandler depend on it."),
+    METASTORE_CLIENT_FACTORY_CLASS("hive.metastore.client.factory.class",
+            "org.apache.hadoop.hive.ql.metadata.SessionHiveMetaStoreClientFactory",
+            "The name of the factory class that produces objects implementing the IMetaStoreClient interface."),
     /**
      * @deprecated Use MetastoreConf.WAREHOUSE
      */
@@ -4420,7 +4423,13 @@ public class HiveConf extends Configuration {
             "This parameter enables a number of optimizations when running on blobstores:\n" +
             "(1) If hive.blobstore.use.blobstore.as.scratchdir is false, force the last Hive job to write to the blobstore.\n" +
             "This is a performance optimization that forces the final FileSinkOperator to write to the blobstore.\n" +
-            "See HIVE-15121 for details.");
+            "See HIVE-15121 for details."),
+
+    HIVE_BLOBSTORE_USE_OUTPUTCOMMITTER("hive.blobstore.use.output-committer", false, "Whether to " +
+            "use a custom PathOutputCommitter to commit data. For all the URIs specified in " +
+            "hive.blobstore.supported.schemes, Hive will honor the config " +
+            "mapreduce.outputcommitter.factory.scheme.[uri-scheme]. This overrides the behavior " +
+            "described in hive.blobstore.optimizations.enabled. See HIVE-16295 for details.");
 
     public final String varname;
     public final String altName;

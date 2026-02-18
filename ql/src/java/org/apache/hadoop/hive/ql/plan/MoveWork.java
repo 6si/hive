@@ -38,8 +38,10 @@ public class MoveWork implements Serializable {
   private LoadTableDesc loadTableWork;
   private LoadFileDesc loadFileWork;
   private LoadMultiFilesDesc loadMultiFilesWork;
+  private PathOutputCommitterWork pathOutputCommitterWork;
   private boolean checkFileFormat;
   private boolean srcLocal;
+  private boolean needCleanTarget;
 
   /**
    * ReadEntitites that are passed to the hooks.
@@ -153,5 +155,21 @@ public class MoveWork implements Serializable {
   public void setSrcLocal(boolean srcLocal) {
     this.srcLocal = srcLocal;
   }
-  
+
+  public boolean isNeedCleanTarget() {
+    return needCleanTarget;
+  }
+
+  public void setNeedCleanTarget(boolean needCleanTarget) {
+    this.needCleanTarget = needCleanTarget;
+  }
+
+  public PathOutputCommitterWork getPathOutputCommitterWork() {
+    return this.pathOutputCommitterWork;
+  }
+
+  public void setPathOutputCommitterWork(
+          PathOutputCommitterWork pathOutputCommitterWork) {
+    this.pathOutputCommitterWork = pathOutputCommitterWork;
+  }
 }
