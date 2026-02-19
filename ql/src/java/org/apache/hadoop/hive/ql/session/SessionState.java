@@ -1226,7 +1226,15 @@ public class SessionState {
      */
     public void printInfo(String info, String detail, boolean isSilent) {
       if (!isSilent) {
-        getInfoStream().println(info);
+        SessionState ss = SessionState.get();
+        boolean addTimestamp = ss != null && ss.getConf() != null 
+            && HiveConf.getBoolVar(ss.getConf(), HiveConf.ConfVars.HIVE_SESSION_STATE_TIMESTAMP);
+        if (addTimestamp) {
+          String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+          getInfoStream().println(timestamp + "\t" + info);
+        } else {
+          getInfoStream().println(info);
+        }
       }
       LOG.info(info + StringUtils.defaultString(detail));
     }

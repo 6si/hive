@@ -3741,6 +3741,10 @@ public class HiveConf extends Configuration {
         "hive.tez.exec.inplace.progress",
         true,
         "Updates tez job execution progress in-place in the terminal when hive-cli is used."),
+    HIVE_SESSION_STATE_TIMESTAMP(
+        "hive.session.state.timestamp",
+        false,
+        "If true, adds timestamp prefix to status messages like 'Launching Job' and 'Moving data to directory'."),
     HIVE_SERVER2_INPLACE_PROGRESS(
         "hive.server2.in.place.progress",
         true,
@@ -3748,6 +3752,9 @@ public class HiveConf extends Configuration {
             + " only if the execution engine is tez."),
     TEZ_DAG_STATUS_CHECK_INTERVAL("hive.tez.dag.status.check.interval", "500ms",
       new TimeValidator(TimeUnit.MILLISECONDS), "Interval between subsequent DAG status invocation."),
+    TEZ_PROGRESS_PRINT_INTERVAL("hive.tez.progress.print.interval", "3s",
+      new TimeValidator(TimeUnit.MILLISECONDS), 
+      "Interval between printing progress status for Map/Reducer tasks. Progress is printed at this fixed interval regardless of status changes."),
     SPARK_EXEC_INPLACE_PROGRESS("hive.spark.exec.inplace.progress", true,
         "Updates spark job execution progress in-place in the terminal."),
     TEZ_CONTAINER_MAX_JAVA_HEAP_FRACTION("hive.tez.container.max.java.heap.fraction", 0.8f,
