@@ -270,14 +270,25 @@ public class TezTask extends Task<TezWork> {
         }
       }
 
-      if (LOG.isInfoEnabled() && counters != null
+      if (counters != null && console != null
           && (HiveConf.getBoolVar(conf, HiveConf.ConfVars.TEZ_EXEC_SUMMARY) ||
           Utilities.isPerfOrAboveLogging(conf))) {
-        for (CounterGroup group: counters) {
-          LOG.info(group.getDisplayName() +":");
-          for (TezCounter counter: group) {
-            LOG.info("   "+counter.getDisplayName()+": "+counter.getValue());
+        try {
+          for (CounterGroup group : counters) {
+            if (group != null) {
+              String groupName = group.getDisplayName();
+              console.printInfoNoTimestamp(groupName != null ? groupName + ":" : "Unknown Group:");
+              for (TezCounter counter : group) {
+                if (counter != null) {
+                  String counterName = counter.getDisplayName();
+                  console.printInfoNoTimestamp("   " + (counterName != null ? counterName : "Unknown") 
+                      + ": " + counter.getValue());
+                }
+              }
+            }
           }
+        } catch (Exception e) {
+          LOG.warn("Failed to print counters to console. Ignoring.", e);
         }
       }
     } catch (Exception e) {

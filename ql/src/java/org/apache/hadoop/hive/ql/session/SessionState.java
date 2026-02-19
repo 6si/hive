@@ -1240,6 +1240,29 @@ public class SessionState {
     }
 
     /**
+     * Logs info into the log file and console without timestamp prefix.
+     * Use this for output like counters where timestamps are not desired.
+     * @param info The log message
+     */
+    public void printInfoNoTimestamp(String info) {
+      printInfoNoTimestamp(info, null, getIsSilent());
+    }
+
+    /**
+     * Logs info into the log file and console without timestamp prefix.
+     * Use this for output like counters where timestamps are not desired.
+     * @param info The log message
+     * @param detail Extra detail to log which will be not printed if null
+     * @param isSilent If true then the message will not be printed to the info stream
+     */
+    public void printInfoNoTimestamp(String info, String detail, boolean isSilent) {
+      if (!isSilent) {
+        getInfoStream().println(info);
+      }
+      LOG.info(info + StringUtils.defaultString(detail));
+    }
+
+    /**
      * Logs an error into the log file, and into the HiveServer2 or HiveCli error stream too.
      * BeeLine uses the operation log file to show the logs to the user, so depending on the
      * BeeLine settings it could be shown to the user.
